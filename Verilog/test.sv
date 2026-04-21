@@ -1,43 +1,3 @@
-module tb_axi_read_master;
-    // AR (Read Address) Channel
-    wire [31:0] ARADDR;   // 읽을 주소
-    wire [7:0]  ARLEN;    // burst length (beats - 1)
-    wire [2:0]  ARSIZE;   // beat당 byte 수 (2^ARSIZE)
-    wire [1:0]  ARBURST;  // burst type (INCR = 2'b01)
-    wire [3:0]  ARID;     // transaction ID
-    wire        ARVALID;  // master가 address 준비됨
-    reg         ARREADY;  // slave가 받을 준비됨
-
-    // R (Read Data) Channel
-    reg  [31:0]   RDATA;    // 읽어온 데이터
-    reg  [3:0]    RID;      // transaction ID (AR과 매칭)
-    reg  [1:0]    RRESP;    // 응답 상태 (OKAY = 2'b00)
-    reg           RLAST;    // burst의 마지막 beat
-    reg           RVALID;   // slave가 data 준비됨
-    wire        RREADY;   // master가 받을 준비됨   
-
-    reg ACLK;     // AXI clock
-    reg ARESETn;  // active-low reset
-
-
-    
-
-endmodule
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 `define SIM
 `include "axi_param.vh"
@@ -60,132 +20,70 @@ module axi_read_master(
     input  [1:0]    RRESP,    // 응답 상태 (OKAY = 2'b00)
     input           RLAST,    // burst의 마지막 beat
     input           RVALID,   // slave가 data 준비됨
-    output reg      RREADY   // master가 받을 준비됨   
+    output reg      RREADY,   // master가 받을 준비됨   
 
     input ACLK,     // AXI clock
     input ARESETn  // active-low reset
 );  
     
-    // Handshake Rule 1. Vaild Assert 이후, READY가 올 때까지 절대 Deassert 금지
-    reg wait_last;
+    // State 정의
+    localparam IDLE      = 2'd0;  // random 값 생성
+    localparam AR_VALID  = 2'd1;  // ARVALID assert, ARREADY 대기
+    localparam WAIT_LAST = 2'd2;  // RLAST 대기
+
+    reg [1:0] state;
 
     always @(posedge ACLK or negedge ARESETn) begin
         if (!ARESETn) begin
+            state   <= IDLE;
             ARVALID <= 0;
-            wait_last <= `OFF;
-        end
-
-        else begin
-            if (!ARVALID&!wait_last) begin
-                ARVALID <= $urandom % 2; // modulo 연산으로 0과 1만 생성함.
-                wait_last <= `OFF;
-            end
-            else begin
-                if ((ARVALID&ARREADY)&!wait_last) begin
-                    ARVALID <= 0;
-                    wait_last <= `ON;
-                end
-                else if (RLAST&wait_last) begin
-                    ARVALID <= 0;
-                    wait_last <= `OFF;
-                end
-                else if ((!wait_last)&(ARVAILD&!ARREADY)) begin
-                    ARVALID <= 1;
-                    wait_last <= `OFF;
-                end
-                else begin
-                    ARVALID <= 0;
-                    wait_last <= `ON;                    
-                end
-            end
-        end
-    end
-
-
-    
-    
-    // 2. Handshake output 설정
-    reg stay;
-    reg [3:0] reg_ARID;
-
-    always @(posedge ACLK or negedge ARESETn) begin
-        if (!ARESETn) reg_ARID <= 0;
-        else begin
-            if (stay&(ARVALID&!ARREADY)) reg_ARID <= ARID;
-            else if (RLAST&wait_last) reg_ARID <= 0;
-            else reg_ARID <= reg_ARID;
-        end
-    end
-
-    always @(posedge ACLK or negedge ARESETn) begin
-        if (!ARESETn) begin
-            ARLEN <= 0;
+            ARADDR  <= 0;
+            ARID    <= 0;
+            ARLEN   <= 0;
+            ARSIZE  <= 0;
             ARBURST <= 0;
-            ARID <= 0;
-            ARSIZE <= 0;
-            ARADDR <= 0;         
-            stay <= `OFF;       
         end
 
         else begin
-            if (!stay&(ARVALID&!ARREADY)) begin
-                ARLEN <= $urandom % 16;
-                ARBURST <= $urandom % 4;
-                ARID <= $urandom % 16;
-                ARSIZE <= $urandom % 4;
-                ARADDR <= $urandom;
-                stay <= `ON;
-            end
+            case (state)
+                // [1단계] random 값을 먼저 생성, ARVALID는 아직 0
+                IDLE: begin
+                    ARADDR  <= $urandom;
+                    ARID    <= $urandom % 16;
+                    ARLEN   <= $urandom % 16;
+                    ARSIZE  <= 3'b010;        // 4byte 고정 권장
+                    ARBURST <= `INCR;
+                    ARVALID <= 1;             // 다음 cycle에 assert
+                    state   <= AR_VALID;
+                end
 
-            else if (stay&(ARVALID&!ARREADY)) begin
-                ARLEN <= ARLEN;
-                ARBURST <= ARBURST;
-                ARID <= ARID;
-                ARSIZE <= ARSIZE;
-                ARADDR <= ARADDR;   
-                stay <= `ON;          
-            end
+                // [2단계] ARVALID assert, ARREADY 올 때까지 신호 고정
+                AR_VALID: begin
+                    if (ARREADY) begin        // handshake 완료
+                        ARVALID <= 0;
+                        state   <= WAIT_LAST;
+                    end
+                    
+                end
 
-            else if (stay&(ARVALID&ARREADY)) begin
-                ARLEN <= 0;
-                ARBURST <= 0;
-                ARID <= 0;
-                ARSIZE <= 0;
-                ARADDR <= 0;
-                stay <= `OFF;
-            end
-
-            else begin
-                ARLEN <= 0;
-                ARBURST <= 0;
-                ARID <= 0;
-                ARSIZE <= 0;
-                ARADDR <= 0;
-                stay <= `OFF;                
-            end
-        end
-    end       
-
-
-
-    // 3. Handshake Data 검증
-
-    always @(posedge ACLK) begin
-        if (RVALID && RREADY) begin
-            if (RID!=reg_ARID) $display("ERROR : ID Mismatch! , expected %0d, but got %0d", reg_ARID, RID);
+                // [3단계] RLAST 올 때까지 대기
+                WAIT_LAST: begin
+                    if (RLAST & RVALID & RREADY) begin
+                        state <= IDLE;
+                    end
+                end
+            endcase
         end
     end
 
     always @(posedge ACLK or negedge ARESETn) begin
-        if (!ARESETn) begin
-            RREADY <= `OFF;
-        end
+        if (!ARESETn) RREADY <= 0;
         else begin
-            if (ARVALID&ARREADY) RREADY <= `ON;
-            else if (RLAST) RREADY <= `OFF;
-            else RREADY <= RREADY;
+            if (state == WAIT_LAST) RREADY <= 1;  // [FIXED] WAIT_LAST 구간에서 항상 HIGH
+            else                    RREADY <= 0;
         end
     end
+
 
     `ifdef SIM
         initial begin
@@ -194,11 +92,9 @@ module axi_read_master(
             ARID = 0;
             ARSIZE = 0;
             ARADDR = 0;         
-            stay = `OFF;    
-            reg_ARID = 0;
-            wait_last = 0;
             ARVALID = 0;
             RREADY = 0;
+
         end
     `endif
 
@@ -206,3 +102,174 @@ module axi_read_master(
 
 
 endmodule 
+
+`define SIM
+`include "axi_param.vh"
+
+`define ON 1
+`define OFF 0
+
+module axi_read_slave(
+    input         ACLK,
+    input         ARESETn,
+
+    // AR Channel
+    input  [31:0] ARADDR,
+    input  [3:0]  ARID,
+    input  [7:0]  ARLEN,
+    input  [2:0]  ARSIZE,
+    input  [1:0]  ARBURST,
+    input         ARVALID,
+    output       ARREADY,
+
+    // R Channel
+    output reg [31:0]   RDATA,
+    output reg [3:0]     RID,
+    output reg [1:0]    RRESP,
+    output reg          RLAST,
+    output reg          RVALID,
+    input               RREADY    
+);
+
+    // ARREADY 
+    reg busy;
+
+    always @(posedge ACLK or negedge ARESETn) begin
+        if (!ARESETn) begin
+            busy <= `OFF;
+        end
+        else begin
+            if (ARVALID) busy <= `ON;
+            else if (RLAST) busy <= `OFF;
+            else busy <= busy;
+        end
+    end
+
+    assign ARREADY = !busy;
+
+    // input capture
+
+    reg [31:0] ARADDR_reg;
+    reg [3:0] ARID_reg;
+    reg [7:0] ARLEN_reg;
+    reg [2:0] ARSIZE_reg;
+    reg [1:0] ARBURST_reg;
+
+    always @(posedge ACLK or negedge ARESETn) begin
+        if (!ARESETn) begin
+            ARADDR_reg <= 0;
+            ARID_reg   <= 0;
+            ARLEN_reg  <= 0;
+            ARSIZE_reg <= 0;
+            ARBURST_reg<= 0;
+            RID        <= 0;  
+        end
+
+        else begin
+            if (ARVALID & ARREADY) begin
+                ARADDR_reg <= ARADDR;
+                ARID_reg   <= ARID;
+                ARLEN_reg  <= ARLEN;
+                ARSIZE_reg <= ARSIZE;
+                ARBURST_reg<= ARBURST;
+                RID        <= ARID;    // [FIXED] 캡처 시점에 미리 설정
+            end
+
+            else if (RLAST) begin
+                ARADDR_reg <= 0;
+                ARID_reg   <= 0;
+                ARLEN_reg  <= 0;
+                ARSIZE_reg <= 0;
+                ARBURST_reg<= 0;
+                RID        <= 0;
+            end
+        end
+    end
+
+
+    // RVALID
+
+    always @(posedge ACLK or negedge ARESETn) begin
+        if (!ARESETn) begin
+            RVALID <= `OFF;
+        end
+        else begin
+            if (busy&!RVALID) RVALID <= $urandom % 2;
+            else if (RLAST) RVALID <= `OFF;
+            else RVALID <= RVALID;
+        end
+    end
+
+    // RDATA + cnt
+
+    reg [9:0] cnt;
+
+    always @(posedge ACLK or negedge ARESETn) begin
+        if (!ARESETn) begin
+            RDATA <= 'h0;
+            RID <= 'h0;
+            RRESP <= 2'b00;      
+            cnt <= 0;
+            RLAST <= 0;  
+        end
+        else begin
+            if (RREADY&(cnt<ARLEN_reg)) begin
+                RDATA <= $urandom;
+
+                RRESP <= 2'b00;      // Good
+                cnt <= cnt + 1;
+                RLAST <= 0;
+            end
+
+            else if (cnt==ARLEN_reg) begin
+                RDATA <= $urandom;
+
+                RRESP <= 2'b00;      // Good
+                cnt <= cnt + 1;
+                RLAST <= 1;
+            end
+
+            else if (RLAST) begin
+                RDATA <= 'h0;
+
+                RRESP <= 2'b00;      
+                cnt <= 0;
+                RLAST <= 0;  
+            end
+
+            else begin
+                RDATA <= RDATA;
+
+                RRESP <= RRESP;
+                cnt <= cnt;
+                RLAST <= RLAST;
+            end
+
+        end
+
+    end
+
+    `ifdef SIM
+        initial begin
+            cnt = 0;
+            ARADDR_reg = 0;
+            ARID_reg = 0;
+            ARLEN_reg = 0;
+            ARSIZE_reg = 0;
+            ARBURST_reg = 0;
+
+            RDATA = 0;
+            RID = 0;
+            RRESP = 0;
+            RLAST = 0;
+            RVALID = 0;
+            busy = 0;
+        end
+    `endif
+
+
+
+
+
+
+endmodule
