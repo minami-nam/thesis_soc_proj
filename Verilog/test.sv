@@ -23,7 +23,38 @@ module axi_read_master(
     output reg      RREADY,   // master가 받을 준비됨   
 
     input ACLK,     // AXI clock
-    input ARESETn  // active-low reset
+    input ARESETn,  // active-low reset
+
+    //========================
+    // Write Address Channel
+    //========================
+    output reg [31:0]  AWADDR,    // write address
+    output reg [7:0]   AWLEN,     // burst length = beats-1
+    output reg [2:0]   AWSIZE,    // bytes per beat = 2^AWSIZE
+    output reg [1:0]   AWBURST,   // FIXED/INCR/WRAP
+    output reg [3:0]   AWID,
+    output reg         AWLOCK,    // AXI4: 1-bit
+    output reg [3:0]   AWCACHE,   // AXI4: 4-bit
+    output reg [2:0]   AWPROT,    // AXI4: 3-bit
+    output reg         AWVALID,
+    input              AWREADY,
+
+    //========================
+    // Write Data Channel
+    //========================
+    output reg [31:0]  WDATA,
+    output reg [3:0]   WSTRB,     
+    output reg         WLAST,
+    output reg         WVALID,
+    input              WREADY,
+
+    //========================
+    // Write Response Channel
+    //========================
+    input      [3:0]   BID,
+    input      [1:0]   BRESP,
+    input              BVALID,
+    output reg         BREADY
 );  
     
     // State 정의
@@ -31,6 +62,10 @@ module axi_read_master(
     localparam AR_VALID  = 2'd1;  // ARVALID assert, ARREADY 대기
     localparam WAIT_LAST = 2'd2;  // RLAST 대기
 
+    // Write State 
+    localparam AW_VALID = 2'd1;
+
+    // Read logic 
     reg [1:0] state;
 
     always @(posedge ACLK or negedge ARESETn) begin
@@ -46,7 +81,6 @@ module axi_read_master(
 
         else begin
             case (state)
-                // [1단계] random 값을 먼저 생성, ARVALID는 아직 0
                 IDLE: begin
                     ARADDR  <= $urandom;
                     ARID    <= $urandom % 16;
@@ -57,7 +91,6 @@ module axi_read_master(
                     state   <= AR_VALID;
                 end
 
-                // [2단계] ARVALID assert, ARREADY 올 때까지 신호 고정
                 AR_VALID: begin
                     if (ARREADY) begin        // handshake 완료
                         ARVALID <= 0;
@@ -66,7 +99,6 @@ module axi_read_master(
                     
                 end
 
-                // [3단계] RLAST 올 때까지 대기
                 WAIT_LAST: begin
                     if (RLAST & RVALID & RREADY) begin
                         state <= IDLE;
@@ -84,6 +116,101 @@ module axi_read_master(
         end
     end
 
+    // Write Logic 
+    reg [1:0] w_state;
+
+    
+    always @(posedge ACLK or negedge ARESETn) begin
+        if (!ARESETn) begin
+            AWADDR <= 0;
+            AWLEN <= 0;
+            AWSIZE <= 3'b010;
+            AWBURST <= `FIXED;
+            AWID <= 0;
+            AWLOCK <= 1'b0;
+            AWCACHE <= 4'b0011;
+            AWPROT <= 3'b000;
+            AWVALID <= 0;
+            w_state <= IDLE;           
+        end
+
+        else begin
+            case(w_state)
+                IDLE : begin
+                    AWADDR <= $urandom;
+                    AWLEN <= $urandom % 16;
+                    AWSIZE <= 3'b010;
+                    AWBURST <= `INCR;
+                    AWID <= $urandom % 16;
+                    AWLOCK <= 1'b0;
+                    AWCACHE <= 4'b0011;
+                    AWPROT <= 3'b000;
+                    AWVALID <= 1;
+                    w_state <= AW_VALID;
+                end
+                AW_VALID : begin
+                    if (AWREADY) begin
+                        AWVALID <= 0;
+                        w_state <= WAIT_LAST;
+                    end
+                end
+                WAIT_LAST : begin
+                    if (WLAST & WVALID & WREADY) begin
+                        w_state <= IDLE;
+                    end
+                end
+            endcase
+        end
+    end
+
+    reg [6:0] w_cnt;
+
+    always @(posedge ACLK or negedge ARESETn) begin
+        if (!ARESETn) begin
+            WVALID <= `OFF;
+            WDATA <= 'h0;
+            WSTRB <= 4'b0000;      
+            w_cnt <= 0;
+            WLAST <= 0;             
+        end
+        else begin
+            if (WREADY&(w_cnt<AWLEN)) begin
+                WVALID <= `ON;
+                WDATA <= $urandom;
+                WSTRB <= 4'b1111;      
+                w_cnt <= w_cnt + 1;
+                WLAST <= 0;
+            end
+
+            else if (w_cnt==AWLEN) begin
+                WDATA <= $urandom;
+                WSTRB <= 4'b1111; 
+                w_cnt <= w_cnt + 1;
+                WLAST <= 1;
+                WVALID <= `ON;
+            end
+
+            else if (WLAST) begin
+                WVALID <= `OFF;
+     
+                w_cnt <= 0;
+                WLAST <= 0;  
+            end
+
+            else begin
+                WDATA <= WDATA;
+                WSTRB <= WSTRB;
+                w_cnt <= w_cnt;
+                WLAST <= WLAST;
+                WVALID <= WVALID;
+            end               
+        end
+    end    
+
+    always @(posedge ACLK or negedge ARESETn) begin
+        if (!ARESETn) BREADY <= 0;
+        else BREADY <= 1;
+    end
 
     `ifdef SIM
         initial begin
@@ -94,8 +221,25 @@ module axi_read_master(
             ARADDR = 0;         
             ARVALID = 0;
             RREADY = 0;
-
         end
+        initial begin
+            AWADDR = 0;
+            AWLEN = 0;
+            AWSIZE = 3'b010;
+            AWBURST = `FIXED;
+            AWID = 0;
+            AWLOCK = 1'b0;
+            AWCACHE = 4'b0011;
+            AWPROT = 3'b000;
+            AWVALID = 0;
+            w_state = IDLE;
+            WDATA = 0;
+            WSTRB = 0;
+            w_cnt = 0;
+            WLAST = 0;
+            BREADY = 0;
+        end
+
     `endif
 
 
@@ -128,7 +272,37 @@ module axi_read_slave(
     output reg [1:0]    RRESP,
     output reg          RLAST,
     output reg          RVALID,
-    input               RREADY    
+    input               RREADY,
+    //========================
+    // Write Address Channel
+    //========================
+    input      [31:0]  AWADDR,
+    input      [7:0]   AWLEN,
+    input      [2:0]   AWSIZE,
+    input      [1:0]   AWBURST,
+    input      [3:0]   AWID,
+    input              AWLOCK,     // AXI4: 1-bit
+    input      [3:0]   AWCACHE,
+    input      [2:0]   AWPROT,
+    input              AWVALID,
+    output reg         AWREADY,
+
+    //========================
+    // Write Data Channel
+    //========================
+    input      [31:0]  WDATA,
+    input      [3:0]   WSTRB,
+    input              WLAST,
+    input              WVALID,
+    output reg         WREADY,
+
+    //========================
+    // Write Response Channel
+    //========================
+    output reg [3:0]   BID,
+    output reg [1:0]   BRESP,
+    output reg         BVALID,
+    input              BREADY    
 );
 
     // ARREADY 
@@ -239,14 +413,95 @@ module axi_read_slave(
 
             else begin
                 RDATA <= RDATA;
-
                 RRESP <= RRESP;
                 cnt <= cnt;
                 RLAST <= RLAST;
             end
+        end
+    end
 
+    reg start;
+    reg    [7:0] AWLEN_reg;
+    reg    [2:0] AWSIZE_reg;
+    reg    [1:0] AWBURST_reg;
+    reg    [3:0] AWID_reg;
+    reg    [2:0] AWLOCK_reg;
+    reg    [3:0] AWPROT_reg;
+
+    // Write Seq
+    always @(posedge ACLK or negedge ARESETn) begin
+        if (!ARESETn) begin
+            AWLEN_reg <= 0;
+            AWSIZE_reg <= 0;
+            AWBURST_reg <= 0;
+            AWID_reg <= 0;
+            AWLOCK_reg <= 0;
+            AWPROT_reg <= 0; 
+            start <= `OFF;          
         end
 
+        else begin
+            if (AWVALID & AWREADY) begin
+                AWLEN_reg <= AWLEN;
+                AWSIZE_reg <= AWSIZE;
+                AWBURST_reg <= AWBURST;
+                AWID_reg <= AWID;
+                AWLOCK_reg <= AWLOCK;
+                AWPROT_reg <= AWPROT;
+                start <= `ON;
+            end
+
+            else if (WLAST) begin
+                AWLEN_reg <= 0;
+                AWSIZE_reg <= 0;
+                AWBURST_reg <= 0;
+                AWID_reg <= 0;
+                AWLOCK_reg <= 0;
+                AWPROT_reg <= 0;
+                start <= `OFF;
+            end
+        end
+    end
+
+    always @(posedge ACLK or negedge ARESETn) begin
+        if (!ARESETn) begin
+            WREADY <= `OFF;
+        end
+        else begin
+            if (AWVALID&!WREADY) WREADY <= 1;
+            else if (WLAST) WREADY <= `OFF;
+            else WREADY <= WREADY;
+        end
+    end
+
+    always @(posedge ACLK or negedge ARESETn) begin
+        if (!ARESETn) AWREADY <= `OFF;
+        else begin
+            if (!AWREADY) AWREADY <= $urandom % 2;
+            
+            else if (AWVALID&AWREADY) AWREADY <= `OFF;
+
+            else AWREADY <= AWREADY;
+        end
+    end
+
+    always @(posedge ACLK or negedge ARESETn) begin
+        if (!ARESETn) begin
+            BID <= 0;
+            BRESP <= 0;
+            BVALID <= 0;
+        end
+
+        else begin
+            if (WVALID && WREADY && WLAST) begin
+                BID <= AWID_reg;
+                BRESP <= 2'b00;
+                BVALID <= `ON;
+            end
+            else if (BVALID && BREADY) begin
+                BVALID <= `OFF;
+            end
+        end
     end
 
     `ifdef SIM
@@ -264,6 +519,22 @@ module axi_read_slave(
             RLAST = 0;
             RVALID = 0;
             busy = 0;
+        end
+
+        initial begin
+            AWLEN_reg = 0;
+            AWSIZE_reg = 0;
+            AWBURST_reg = 0;
+            AWID_reg = 0;
+            AWLOCK_reg = 0;
+            AWPROT_reg = 0;
+            start = `OFF;
+
+            AWREADY = `OFF;
+            WREADY = `OFF;
+            BID = 0;
+            BRESP = 0;
+            BVALID = 0;
         end
     `endif
 
