@@ -5,3 +5,5 @@
 #### Change Log : 
  - 2026-04-21 : AXI Master READ 구현 시작.
  - 2026-04-23 : AXI Master/Slave R/W 구현 완료.
+
+ - 2026-05-01 : AXI4 Reordering FULL READ 구현 완료.
