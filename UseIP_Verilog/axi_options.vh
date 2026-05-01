@@ -2,5 +2,5 @@
 `define OPTION
 `endif
 
-`define SIM
+`define FPGA
 `define OUT_ORDER
