@@ -10,7 +10,7 @@ module axi_ooo_read_queue_cache(
 
     input ACLK,
     input ARESETn,
-    input data_in_vaild,
+    input data_in_valid,
     input data_out_ready,
 
     output [ID_WIDTH-1:0] o_id,
@@ -19,7 +19,7 @@ module axi_ooo_read_queue_cache(
     output [2:0] o_size,
     output [1:0] o_burst,
     output data_in_ready,
-    output data_out_vaild
+    output data_out_valid
 );
     // reg 정의
 
@@ -31,11 +31,11 @@ module axi_ooo_read_queue_cache(
     reg [$clog2(NUM_READ_IDTABLE)-1:0] cnt;
 
     // 데이터 입출력 조건
-    wire data_in = data_in_vaild&data_in_ready;
-    wire data_out = data_out_vaild&data_out_ready;
+    wire data_in = data_in_valid&data_in_ready;
+    wire data_out = data_out_valid&data_out_ready;
 
     assign data_in_ready = (cnt<NUM_READ_IDTABLE) ? ON : OFF;
-    assign data_out_vaild = (cnt!=0) ? ON : OFF;
+    assign data_out_valid = (cnt!=0) ? ON : OFF;
 
     // cnt 관련
     always @(posedge ACLK or negedge ARESETn) begin
@@ -94,6 +94,11 @@ module axi_ooo_read_queue_cache(
         end
     end
 
+    assign o_id = (data_out_valid) ? reg_id[0] : '0;
+    assign o_addr = (data_out_valid) ? reg_addr[0] : '0;
+    assign o_len = (data_out_valid) ? reg_len[0] : '0;
+    assign o_size = (data_out_valid) ? reg_size[0] : '0;
+    assign o_burst = (data_out_valid) ? reg_burst[0] : '0;
 
     
 

@@ -1,4 +1,4 @@
-`import "axi_include_top.vh"
+`include "axi_include_top.vh"
 
 package axi_pkg;
     // Common
@@ -15,10 +15,9 @@ package axi_pkg;
     
     `ifdef OUT_ORDER
         // Read
-        localparam int NUM_READ_IDTABLE = 2 ** (ID_WIDTH);
-        localparam int NUM_READ_CACHE = 2 ** (LEN_WIDTH);
-        localparam int NUM_READ_BUFFERZSIZE = 16;
-
+        localparam int NUM_READ_IDTABLE = 16;
+        localparam int NUM_READ_SCHEDULER = 16;
+        localparam int NUM_READ_REORDER = 8;
         // Common
         localparam int NUM_BANK = 8; 
     `endif

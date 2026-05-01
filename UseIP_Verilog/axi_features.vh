@@ -1,8 +1,8 @@
-`import "axi_options.vh"
+`include "axi_include_top.vh"
 
 
 `ifndef FEATURES
-`define FEAUTRES
+`define FEATURES
 // Option
 // SIM으로 설정 시 simulation 관련 설정 불러오기
 
@@ -18,7 +18,8 @@
 // 정책 설정 
 `ifdef OUT_ORDER
     `define OOO_POLICY_HERE // 생각한 Policy 작성하기
-    `define OOO_CUSTOM_POLICY1
+    `define BANK_AWARE
+    `define MINAMI_CUSTOM
     `ifdef IN_ORDER
         $error("ERROR : IN_ORDER and OUT_ORDER cannot be both defined!");
     `endif
