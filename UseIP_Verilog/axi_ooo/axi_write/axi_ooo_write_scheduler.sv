@@ -27,7 +27,7 @@ module axi_ooo_aw_scheduler(
     `ifdef WRITE_MINAMI_CUSTOM
         localparam KEEP_MAX_LENGTH = 8;
         localparam CNT_WIDTH = $clog2(KEEP_MAX_LENGTH);
-        localparam ID_MAX = (2 ** ID_WIDTH);
+        localparam ID_MAX = (1<<ID_WIDTH);
         localparam INDEX_WIDTH = (NUM_WRITE_SCHEDULER <= 1) ? 1 : $clog2(NUM_WRITE_SCHEDULER);
 
 
@@ -51,7 +51,6 @@ module axi_ooo_aw_scheduler(
         reg has_same_id;
         reg has_other_id;
         reg max_count_found;
-        reg limit_reached;
         reg [INDEX_WIDTH-1:0] fill_index;
         reg [INDEX_WIDTH-1:0] same_id_index;
         reg [INDEX_WIDTH-1:0] max_count_index;
@@ -59,6 +58,9 @@ module axi_ooo_aw_scheduler(
 
         wire [INDEX_WIDTH-1:0] issue_index;
         wire [INDEX_WIDTH-1:0] write_index;
+
+        wire limit_reached = (cnt_awid_ocheck[previous_o_awid] >= KEEP_MAX_LENGTH);
+        wire is_ocnt_max = (cnt_awid_ocheck[o_AWID]==KEEP_MAX_LENGTH) ? ON : OFF;
         
         // 각 ID 별로 몇 번 Data Out이 진행되었는지 체크 + previous 값도 체크
 
@@ -73,49 +75,69 @@ module axi_ooo_aw_scheduler(
                              (has_same_id) ? same_id_index : max_count_index;
         assign write_index = (!cache_has_empty && aw_out) ? issue_index : fill_index;
 
-        // state 판별을 위한 comb logic
-        always @(*) begin
-            cache_has_empty = OFF;
-            cache_has_valid = OFF;
-            has_same_id = OFF;
-            has_other_id = OFF;
-            max_count_found = OFF;
-            fill_index = '0;
-            same_id_index = '0;
-            max_count_index = '0;
-            max_count_value = '0;
-            limit_reached = (cnt_awid_ocheck[previous_o_awid] >= KEEP_MAX_LENGTH);
+        // state 판별을 위한 logic
 
-            for (int i=0; i<NUM_WRITE_SCHEDULER; i++) begin
-                if (!reg_valid[i] && !cache_has_empty) begin
-                    cache_has_empty = ON;
-                    fill_index = INDEX_WIDTH'(i);
-                end
-
-                if (reg_valid[i]) begin
-                    cache_has_valid = ON;
-
-                    if ((reg_AWID[i] == previous_o_awid) && !has_same_id) begin
-                        has_same_id = ON;
-                        same_id_index = INDEX_WIDTH'(i);
-                    end
-
-                    if (reg_AWID[i] != previous_o_awid) begin   // 현재 출력과 previous 출력이 다른 경우 cnt를 초기화 시키는 방향으로 가야함.
-                        if (!has_other_id || (cnt_awid_icheck[reg_AWID[i]] > max_count_value)) begin
-                            max_count_found = ON;
-                            max_count_value = cnt_awid_icheck[reg_AWID[i]];
-                            max_count_index = INDEX_WIDTH'(i);
-                        end
-                        has_other_id = ON;
-                    end
-                    else if (!has_other_id && (!max_count_found || (cnt_awid_icheck[reg_AWID[i]] > max_count_value))) begin 
-                        max_count_found = ON;
-                        max_count_value = cnt_awid_icheck[reg_AWID[i]];
-                        max_count_index = INDEX_WIDTH'(i);  // 이런 방식으로 index를 구할 수 있다는 것 참조하기.
+        // 수정 1. seq하게 분리함.
+        always @(posedge ACLK or negedge ARESETn) begin
+            if (!ARESETn) begin
+                cache_has_empty <= OFF;
+                fill_index <= '0;
+            end
+            else begin
+                for (int i=0; i<NUM_WRITE_SCHEDULER; i++) begin
+                    if (!reg_valid[i] && !cache_has_empty) begin
+                        cache_has_empty <= ON;
+                        fill_index <= INDEX_WIDTH'(i);
                     end
                 end
             end
         end
+
+
+        always  @(posedge ACLK or negedge ARESETn) begin
+            if (!ARESETn) begin
+                cache_has_valid <= OFF;
+                max_count_found <= OFF;
+                max_count_value <= '0;
+                max_count_index <= '0;
+                has_same_id <= OFF;
+                has_other_id <= OFF;
+            end
+            else begin
+                for (int i=0; i<NUM_WRITE_SCHEDULER; i++) begin
+                    if (reg_valid[i]) begin
+                        cache_has_valid <= ON;
+                        if ((reg_AWID[i] == previous_o_awid) && !has_same_id) begin
+                            has_same_id <= ON;
+                            same_id_index <= INDEX_WIDTH'(i);
+                        end
+
+                        if (reg_AWID[i] != previous_o_awid) begin   // 현재 출력과 previous 출력이 다른 경우 cnt를 초기화 시키는 방향으로 가야함.
+                            if (!has_other_id || (cnt_awid_icheck[reg_AWID[i]] > max_count_value)) begin
+                                max_count_found <= ON;
+                                max_count_value <= cnt_awid_icheck[reg_AWID[i]];
+                                max_count_index <= INDEX_WIDTH'(i);
+                            end
+                            has_other_id <= ON;
+                        end
+                        else if (!has_other_id && (!max_count_found || (cnt_awid_icheck[reg_AWID[i]] > max_count_value))) begin 
+                            max_count_found <= ON;
+                            max_count_value <= cnt_awid_icheck[reg_AWID[i]];
+                            max_count_index <= INDEX_WIDTH'(i);  // 이런 방식으로 index를 구할 수 있다는 것 참조하기.
+                        end
+                        else begin
+                            max_count_found <= OFF;
+                            max_count_value <= '0;
+                            max_count_index <= '0;
+                        end
+                    end
+                    else begin
+                        cache_has_valid <= OFF;
+                    end
+                end
+            end
+        end
+
 
         // Previous AWID Checker
         always @(posedge ACLK or negedge ARESETn) begin
@@ -124,6 +146,8 @@ module axi_ooo_aw_scheduler(
         end
 
         // Data out Counter
+        
+
         always @(posedge ACLK or negedge ARESETn) begin
             if (!ARESETn) begin
                 for (int i=0; i<ID_MAX; i++) begin : reset_reg_ocheck
@@ -134,10 +158,10 @@ module axi_ooo_aw_scheduler(
                 if (aw_out && (previous_o_awid != o_AWID)) begin
                     cnt_awid_ocheck[o_AWID] <= 1'b1;
                 end
-                else if ((aw_out)&(cnt_awid_ocheck[o_AWID]!=KEEP_MAX_LENGTH)) begin   // 아직 cnt가 KEEP_MAX_LENGTH 값에 도달하지 않았을 경우
+                else if ((aw_out)&(!is_ocnt_max)) begin   // 아직 cnt가 KEEP_MAX_LENGTH 값에 도달하지 않았을 경우
                     cnt_awid_ocheck[o_AWID] <= cnt_awid_ocheck[o_AWID] + 1'b1;
                 end
-                else if ((aw_out)&(cnt_awid_ocheck[o_AWID]==KEEP_MAX_LENGTH)) begin  // cnt가 KEEP_MAX_LENGTH 값에 도달한 경우
+                else if ((aw_out)&is_ocnt_max) begin  // cnt가 KEEP_MAX_LENGTH 값에 도달한 경우
                     cnt_awid_ocheck[o_AWID] <= '0;
                 end
             end
@@ -234,7 +258,6 @@ module axi_ooo_aw_scheduler(
                 has_same_id = OFF;
                 has_other_id = OFF;
                 max_count_found = OFF;
-                limit_reached = OFF;
                 fill_index = '0;
                 same_id_index = '0;
                 max_count_index = '0;

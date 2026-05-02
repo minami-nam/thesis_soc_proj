@@ -4,26 +4,26 @@ package axi_pkg;
     // Common
     localparam OFF = 1'b0;
     localparam ON = 1'b1;
-    localparam int FIFO_NUM = 16;
-    localparam ADDR_WIDTH = 32;
-    localparam DATA_WIDTH = 32;
-    localparam ID_WIDTH   = 4;
-    localparam LEN_WIDTH  = 8;
+    localparam int FIFO_NUM = 8;
+    localparam ADDR_WIDTH = 16;
+    localparam DATA_WIDTH = 16;
+    localparam ID_WIDTH   = 3;
+    localparam LEN_WIDTH  = 4;
 
     // For OoO Only
 
     
     `ifdef OUT_ORDER
         // Read
-        localparam int NUM_READ_IDTABLE = 16;
-        localparam int NUM_READ_SCHEDULER = 16;
-        localparam int NUM_READ_REORDER = 8;
+        localparam int NUM_READ_IDTABLE = 4;
+        localparam int NUM_READ_SCHEDULER = 4;
+        localparam int NUM_READ_REORDER = 4;
         // Common
-        localparam int NUM_BANK = 8; 
+        localparam int NUM_BANK = 4; 
 
         // Write
-        localparam int NUM_WRITE_AWQUEUE = 8;
-        localparam int NUM_WRITE_SCHEDULER = 8;
+        localparam int NUM_WRITE_AWQUEUE = 4;
+        localparam int NUM_WRITE_SCHEDULER = 4;
         localparam int NUM_WRITE_ORDER_QUEUE_AW = NUM_WRITE_AWQUEUE;
         
         

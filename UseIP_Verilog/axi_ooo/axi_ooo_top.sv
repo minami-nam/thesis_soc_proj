@@ -96,12 +96,12 @@ module axi_ooo_controller
     output wire                    S_AXI_HP0_BREADY
 );
     // Synthesis + Implementation 목적 BUFG Instance.
-    wire filtered_clk;
+    wire filtered_clk = ACLK;
 
-    BUFG filter_clk (
-        .I(ACLK),
-        .O(filtered_clk)
-    );
+//    BUFG filter_clk (
+//        .I(ACLK),
+//        .O(filtered_clk)
+//    );
 
     axi_read_ooo u_axi_read_ooo (
         .ACLK(filtered_clk),
