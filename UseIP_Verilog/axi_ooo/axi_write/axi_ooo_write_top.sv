@@ -110,9 +110,6 @@ module axi_write_ooo(
     assign S_AXI_HP0_WLAST = order_o_wlast;
     assign S_AXI_HP0_WVALID = order_o_wvalid && b_wready;
 
-    // B READY를 ON으로 설정하는 이유는 : STALL 방지를 위해서 일단 이렇게 해놨음. Slave에게는 계속 BREADY 신호를 줘야 바로바로 B 신호들을 전송 받을 수 있음.
-    assign S_AXI_HP0_BREADY = ON;
-
     axi_ooo_aw_queue u_write_aw_queue (
         .i_AWID(M_AXI_GP0_AWID),
         .i_AWADDR(M_AXI_GP0_AWADDR),
@@ -196,6 +193,11 @@ module axi_write_ooo(
         .i_WLAST(order_o_wlast),
         .i_WVALID(order_o_wvalid && S_AXI_HP0_WREADY),
         .i_WREADY(b_wready),
+
+        .i_BID(S_AXI_HP0_BID),
+        .i_BRESP(S_AXI_HP0_BRESP),
+        .i_BVALID(S_AXI_HP0_BVALID),
+        .i_BREADY(S_AXI_HP0_BREADY),
 
         .aw_scheduler_fire(aw_scheduler_fire),
         .aw_scheduler_ready(b_aw_scheduler_ready),

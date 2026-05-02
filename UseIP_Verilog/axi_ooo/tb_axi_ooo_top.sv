@@ -93,6 +93,7 @@ module tb_axi_ooo_top;
     req_t read_req_q[$];
     req_t hp_read_q[$];
     req_t write_req_q[$];
+    req_t hp_write_q[$];
     int unsigned expected_read_beats;
     int unsigned observed_read_beats;
     int unsigned observed_ar;
@@ -412,12 +413,51 @@ module tb_axi_ooo_top;
         end
     end
 
+    initial begin : hp_write_resp_model
+        req_t req;
+        wait (ARESETn);
+
+        forever begin
+            @(posedge ACLK);
+
+            if (!ARESETn) begin
+                hp_write_q.delete();
+                S_AXI_HP0_BID <= '0;
+                S_AXI_HP0_BRESP <= 2'b00;
+                S_AXI_HP0_BVALID <= 1'b0;
+            end
+            else begin
+                if (S_AXI_HP0_BVALID) begin
+                    if (S_AXI_HP0_BREADY) begin
+                        S_AXI_HP0_BID <= '0;
+                        S_AXI_HP0_BRESP <= 2'b00;
+                        S_AXI_HP0_BVALID <= 1'b0;
+                    end
+                end
+                else if (S_AXI_HP0_WVALID && S_AXI_HP0_WREADY && S_AXI_HP0_WLAST && (hp_write_q.size() != 0)) begin
+                    req = hp_write_q.pop_front();
+                    S_AXI_HP0_BID <= req.id;
+                    S_AXI_HP0_BRESP <= 2'b00;
+                    S_AXI_HP0_BVALID <= 1'b1;
+                end
+            end
+        end
+    end
+
     always @(posedge ACLK) begin
+        req_t aw_req;
+
         if (ARESETn) begin
             S_AXI_HP0_AWREADY <= (cycle_cnt[2:1] != 2'b11);
             S_AXI_HP0_WREADY <= (cycle_cnt[3:1] != 3'b101);
 
             if (S_AXI_HP0_AWVALID && S_AXI_HP0_AWREADY) begin
+                aw_req.id = S_AXI_HP0_AWID;
+                aw_req.addr = S_AXI_HP0_AWADDR;
+                aw_req.len = S_AXI_HP0_AWLEN;
+                aw_req.size = S_AXI_HP0_AWSIZE;
+                aw_req.burst = S_AXI_HP0_AWBURST;
+                hp_write_q.push_back(aw_req);
                 observed_aw++;
             end
 

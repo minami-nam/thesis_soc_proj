@@ -8,6 +8,11 @@ module axi_ooo_write_b_router(
     input i_WVALID,
     output i_WREADY,
 
+    input [ID_WIDTH-1:0] i_BID,
+    input [1:0] i_BRESP,
+    input i_BVALID,
+    output i_BREADY,
+
     input aw_scheduler_fire,
     output aw_scheduler_ready,
 
@@ -26,8 +31,10 @@ module axi_ooo_write_b_router(
     localparam int B_INDEX_WIDTH = (B_FIFO_DEPTH <= 1) ? 1 : $clog2(B_FIFO_DEPTH);
 
     reg [ID_WIDTH-1:0] reg_AWID[0:B_FIFO_DEPTH-1];
+    reg reg_WSTRB_ERR[0:B_FIFO_DEPTH-1];
     reg [B_INDEX_WIDTH-1:0] aw_rd_ptr;
     reg [B_INDEX_WIDTH-1:0] aw_wr_ptr;
+    reg [B_INDEX_WIDTH-1:0] w_rd_ptr;
     reg [B_INDEX_WIDTH:0] aw_cnt;
 
     reg [ID_WIDTH-1:0] reg_BID[0:B_FIFO_DEPTH-1];
@@ -42,11 +49,19 @@ module axi_ooo_write_b_router(
     wire b_fifo_empty = (b_cnt == '0);
     wire w_fire = i_WVALID && i_WREADY;
     wire aw_push = aw_scheduler_fire && aw_scheduler_ready;
-    wire b_push = w_fire && i_WLAST && !aw_fifo_empty;
-    wire b_pop = o_BVALID && o_BREADY;
-    wire [1:0] next_bresp = (i_WSTRB == '0) ? BRESP_SLVERR : BRESP_OKAY;
+    wire aw_done = w_fire && i_WLAST && !aw_fifo_empty;
+    wire slave_b_fire = i_BVALID && i_BREADY;
+    wire master_b_push = slave_b_fire && !b_fifo_full;
+    wire master_b_pop = o_BVALID && o_BREADY;
+    wire wstrb_err = (i_WSTRB == '0);
+    wire bid_mismatch = (i_BID != reg_AWID[aw_rd_ptr]);
+    wire routed_slverr = reg_WSTRB_ERR[aw_rd_ptr] ||
+                         (aw_done && (w_rd_ptr == aw_rd_ptr) && wstrb_err) ||
+                         bid_mismatch;
+    wire [1:0] routed_bresp = routed_slverr ? BRESP_SLVERR : i_BRESP;
 
-    assign i_WREADY = (!b_fifo_full || b_pop) && !aw_fifo_empty;
+    assign i_WREADY = !aw_fifo_empty;
+    assign i_BREADY = !b_fifo_full && !aw_fifo_empty;
     assign aw_scheduler_ready = !aw_fifo_full;
 
     assign o_BVALID = !b_fifo_empty;
@@ -57,6 +72,7 @@ module axi_ooo_write_b_router(
         if (!ARESETn) begin
             aw_rd_ptr <= '0;
             aw_wr_ptr <= '0;
+            w_rd_ptr <= '0;
             aw_cnt <= '0;
             rd_ptr <= '0;
             wr_ptr <= '0;
@@ -64,12 +80,13 @@ module axi_ooo_write_b_router(
 
             for (int i=0; i<B_FIFO_DEPTH; i++) begin
                 reg_AWID[i] <= '0;
+                reg_WSTRB_ERR[i] <= OFF;
                 reg_BID[i] <= '0;
                 reg_BRESP[i] <= BRESP_OKAY;
             end
         end
         else begin
-            case ({aw_push, b_push})
+            case ({aw_push, slave_b_fire})
                 2'b01: begin
                     if (aw_cnt != '0) aw_cnt <= aw_cnt - 1'b1;
                 end
@@ -79,7 +96,7 @@ module axi_ooo_write_b_router(
                 default: aw_cnt <= aw_cnt;
             endcase
 
-            case ({b_push, b_pop})
+            case ({master_b_push, master_b_pop})
                 2'b01: begin
                     if (b_cnt != '0) b_cnt <= b_cnt - 1'b1;
                 end
@@ -89,26 +106,36 @@ module axi_ooo_write_b_router(
                 default: b_cnt <= b_cnt;
             endcase
 
-            if (b_push) begin
+            if (slave_b_fire) begin
                 if (aw_rd_ptr == B_INDEX_WIDTH'(B_FIFO_DEPTH-1)) aw_rd_ptr <= '0;
                 else aw_rd_ptr <= aw_rd_ptr + 1'b1;
             end
 
+            if (aw_done) begin
+                if (w_rd_ptr == B_INDEX_WIDTH'(B_FIFO_DEPTH-1)) w_rd_ptr <= '0;
+                else w_rd_ptr <= w_rd_ptr + 1'b1;
+            end
+
             if (aw_push) begin
                 reg_AWID[aw_wr_ptr] <= i_AWID;
+                reg_WSTRB_ERR[aw_wr_ptr] <= OFF;
 
                 if (aw_wr_ptr == B_INDEX_WIDTH'(B_FIFO_DEPTH-1)) aw_wr_ptr <= '0;
                 else aw_wr_ptr <= aw_wr_ptr + 1'b1;
             end
 
-            if (b_pop) begin
+            if (w_fire) begin
+                reg_WSTRB_ERR[w_rd_ptr] <= reg_WSTRB_ERR[w_rd_ptr] || wstrb_err;
+            end
+
+            if (master_b_pop) begin
                 if (rd_ptr == B_INDEX_WIDTH'(B_FIFO_DEPTH-1)) rd_ptr <= '0;
                 else rd_ptr <= rd_ptr + 1'b1;
             end
 
-            if (b_push) begin
+            if (master_b_push) begin
                 reg_BID[wr_ptr] <= reg_AWID[aw_rd_ptr];
-                reg_BRESP[wr_ptr] <= next_bresp;
+                reg_BRESP[wr_ptr] <= routed_bresp;
 
                 if (wr_ptr == B_INDEX_WIDTH'(B_FIFO_DEPTH-1)) wr_ptr <= '0;
                 else wr_ptr <= wr_ptr + 1'b1;
@@ -120,6 +147,7 @@ module axi_ooo_write_b_router(
         initial begin
             aw_rd_ptr = '0;
             aw_wr_ptr = '0;
+            w_rd_ptr = '0;
             aw_cnt = '0;
             rd_ptr = '0;
             wr_ptr = '0;
@@ -127,6 +155,7 @@ module axi_ooo_write_b_router(
 
             for (int i=0; i<B_FIFO_DEPTH; i++) begin
                 reg_AWID[i] = '0;
+                reg_WSTRB_ERR[i] = OFF;
                 reg_BID[i] = '0;
                 reg_BRESP[i] = BRESP_OKAY;
             end
