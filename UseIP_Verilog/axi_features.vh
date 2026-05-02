@@ -20,6 +20,7 @@
     `define OOO_POLICY_HERE // 생각한 Policy 작성하기
     `define BANK_AWARE
     `define MINAMI_CUSTOM
+    `define WRITE_MINAMI_CUSTOM
     `ifdef IN_ORDER
         $error("ERROR : IN_ORDER and OUT_ORDER cannot be both defined!");
     `endif
