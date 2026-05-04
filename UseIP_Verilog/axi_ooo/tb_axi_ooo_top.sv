@@ -12,73 +12,73 @@ module tb_axi_ooo_top;
     logic ACLK;
     logic ARESETn;
 
-    logic [ID_WIDTH-1:0]     M_AXI_GP0_ARID;
-    logic [ADDR_WIDTH-1:0]   M_AXI_GP0_ARADDR;
-    logic [LEN_WIDTH-1:0]    M_AXI_GP0_ARLEN;
-    logic [2:0]              M_AXI_GP0_ARSIZE;
-    logic [1:0]              M_AXI_GP0_ARBURST;
-    logic                    M_AXI_GP0_ARVALID;
-    wire                     M_AXI_GP0_ARREADY;
+    logic [ID_WIDTH-1:0]     S_AXI_ARID;
+    logic [ADDR_WIDTH-1:0]   S_AXI_ARADDR;
+    logic [LEN_WIDTH-1:0]    S_AXI_ARLEN;
+    logic [2:0]              S_AXI_ARSIZE;
+    logic [1:0]              S_AXI_ARBURST;
+    logic                    S_AXI_ARVALID;
+    wire                     S_AXI_ARREADY;
 
-    logic [ID_WIDTH-1:0]     M_AXI_GP0_AWID;
-    logic [ADDR_WIDTH-1:0]   M_AXI_GP0_AWADDR;
-    logic [LEN_WIDTH-1:0]    M_AXI_GP0_AWLEN;
-    logic [2:0]              M_AXI_GP0_AWSIZE;
-    logic [1:0]              M_AXI_GP0_AWBURST;
-    logic                    M_AXI_GP0_AWVALID;
-    wire                     M_AXI_GP0_AWREADY;
+    logic [ID_WIDTH-1:0]     S_AXI_AWID;
+    logic [ADDR_WIDTH-1:0]   S_AXI_AWADDR;
+    logic [LEN_WIDTH-1:0]    S_AXI_AWLEN;
+    logic [2:0]              S_AXI_AWSIZE;
+    logic [1:0]              S_AXI_AWBURST;
+    logic                    S_AXI_AWVALID;
+    wire                     S_AXI_AWREADY;
 
-    logic [DATA_WIDTH-1:0]   M_AXI_GP0_WDATA;
-    logic [DATA_WIDTH/8-1:0] M_AXI_GP0_WSTRB;
-    logic                    M_AXI_GP0_WLAST;
-    logic                    M_AXI_GP0_WVALID;
-    wire                     M_AXI_GP0_WREADY;
+    logic [DATA_WIDTH-1:0]   S_AXI_WDATA;
+    logic [DATA_WIDTH/8-1:0] S_AXI_WSTRB;
+    logic                    S_AXI_WLAST;
+    logic                    S_AXI_WVALID;
+    wire                     S_AXI_WREADY;
 
-    wire [ID_WIDTH-1:0]      M_AXI_GP0_RID;
-    wire [DATA_WIDTH-1:0]    M_AXI_GP0_RDATA;
-    wire [1:0]               M_AXI_GP0_RRESP;
-    wire                     M_AXI_GP0_RLAST;
-    wire                     M_AXI_GP0_RVALID;
-    logic                    M_AXI_GP0_RREADY;
+    wire [ID_WIDTH-1:0]      S_AXI_RID;
+    wire [DATA_WIDTH-1:0]    S_AXI_RDATA;
+    wire [1:0]               S_AXI_RRESP;
+    wire                     S_AXI_RLAST;
+    wire                     S_AXI_RVALID;
+    logic                    S_AXI_RREADY;
 
-    wire [ID_WIDTH-1:0]      M_AXI_GP0_BID;
-    wire [1:0]               M_AXI_GP0_BRESP;
-    wire                     M_AXI_GP0_BVALID;
-    logic                    M_AXI_GP0_BREADY;
+    wire [ID_WIDTH-1:0]      S_AXI_BID;
+    wire [1:0]               S_AXI_BRESP;
+    wire                     S_AXI_BVALID;
+    logic                    S_AXI_BREADY;
 
-    wire [ID_WIDTH-1:0]      S_AXI_HP0_ARID;
-    wire [ADDR_WIDTH-1:0]    S_AXI_HP0_ARADDR;
-    wire [LEN_WIDTH-1:0]     S_AXI_HP0_ARLEN;
-    wire [2:0]               S_AXI_HP0_ARSIZE;
-    wire [1:0]               S_AXI_HP0_ARBURST;
-    wire                     S_AXI_HP0_ARVALID;
-    logic                    S_AXI_HP0_ARREADY;
+    wire [ID_WIDTH-1:0]      M_AXI_ARID;
+    wire [ADDR_WIDTH-1:0]    M_AXI_ARADDR;
+    wire [LEN_WIDTH-1:0]     M_AXI_ARLEN;
+    wire [2:0]               M_AXI_ARSIZE;
+    wire [1:0]               M_AXI_ARBURST;
+    wire                     M_AXI_ARVALID;
+    logic                    M_AXI_ARREADY;
 
-    wire [ID_WIDTH-1:0]      S_AXI_HP0_AWID;
-    wire [ADDR_WIDTH-1:0]    S_AXI_HP0_AWADDR;
-    wire [LEN_WIDTH-1:0]     S_AXI_HP0_AWLEN;
-    wire [2:0]               S_AXI_HP0_AWSIZE;
-    wire [1:0]               S_AXI_HP0_AWBURST;
-    wire                     S_AXI_HP0_AWVALID;
-    logic                    S_AXI_HP0_AWREADY;
+    wire [ID_WIDTH-1:0]      M_AXI_AWID;
+    wire [ADDR_WIDTH-1:0]    M_AXI_AWADDR;
+    wire [LEN_WIDTH-1:0]     M_AXI_AWLEN;
+    wire [2:0]               M_AXI_AWSIZE;
+    wire [1:0]               M_AXI_AWBURST;
+    wire                     M_AXI_AWVALID;
+    logic                    M_AXI_AWREADY;
 
-    wire [DATA_WIDTH-1:0]    S_AXI_HP0_WDATA;
-    wire [DATA_WIDTH/8-1:0]  S_AXI_HP0_WSTRB;
-    wire                     S_AXI_HP0_WLAST;
-    wire                     S_AXI_HP0_WVALID;
-    logic                    S_AXI_HP0_WREADY;
+    wire [DATA_WIDTH-1:0]    M_AXI_WDATA;
+    wire [DATA_WIDTH/8-1:0]  M_AXI_WSTRB;
+    wire                     M_AXI_WLAST;
+    wire                     M_AXI_WVALID;
+    logic                    M_AXI_WREADY;
 
-    logic [ID_WIDTH-1:0]     S_AXI_HP0_RID;
-    logic [DATA_WIDTH-1:0]   S_AXI_HP0_RDATA;
-    logic [1:0]              S_AXI_HP0_RRESP;
-    logic                    S_AXI_HP0_RLAST;
-    logic                    S_AXI_HP0_RVALID;
-    wire                     S_AXI_HP0_RREADY;
+    logic [ID_WIDTH-1:0]     M_AXI_RID;
+    logic [DATA_WIDTH-1:0]   M_AXI_RDATA;
+    logic [1:0]              M_AXI_RRESP;
+    logic                    M_AXI_RLAST;
+    logic                    M_AXI_RVALID;
+    wire                     M_AXI_RREADY;
 
-    logic [ID_WIDTH-1:0]     S_AXI_HP0_BID;
-    logic [1:0]              S_AXI_HP0_BRESP;
-    logic                    S_AXI_HP0_BVALID;
-    wire                     S_AXI_HP0_BREADY;
+    logic [ID_WIDTH-1:0]     M_AXI_BID;
+    logic [1:0]              M_AXI_BRESP;
+    logic                    M_AXI_BVALID;
+    wire                     M_AXI_BREADY;
 
     // typedef struct 사용해서 해당 값들을 모아 사전 def.
     typedef struct packed {
@@ -108,73 +108,73 @@ module tb_axi_ooo_top;
         .ACLK(ACLK),
         .ARESETn(ARESETn),
 
-        .M_AXI_GP0_ARID(M_AXI_GP0_ARID),
-        .M_AXI_GP0_ARADDR(M_AXI_GP0_ARADDR),
-        .M_AXI_GP0_ARLEN(M_AXI_GP0_ARLEN),
-        .M_AXI_GP0_ARSIZE(M_AXI_GP0_ARSIZE),
-        .M_AXI_GP0_ARBURST(M_AXI_GP0_ARBURST),
-        .M_AXI_GP0_ARVALID(M_AXI_GP0_ARVALID),
-        .M_AXI_GP0_ARREADY(M_AXI_GP0_ARREADY),
+        .S_AXI_ARID(S_AXI_ARID),
+        .S_AXI_ARADDR(S_AXI_ARADDR),
+        .S_AXI_ARLEN(S_AXI_ARLEN),
+        .S_AXI_ARSIZE(S_AXI_ARSIZE),
+        .S_AXI_ARBURST(S_AXI_ARBURST),
+        .S_AXI_ARVALID(S_AXI_ARVALID),
+        .S_AXI_ARREADY(S_AXI_ARREADY),
 
-        .M_AXI_GP0_AWID(M_AXI_GP0_AWID),
-        .M_AXI_GP0_AWADDR(M_AXI_GP0_AWADDR),
-        .M_AXI_GP0_AWLEN(M_AXI_GP0_AWLEN),
-        .M_AXI_GP0_AWSIZE(M_AXI_GP0_AWSIZE),
-        .M_AXI_GP0_AWBURST(M_AXI_GP0_AWBURST),
-        .M_AXI_GP0_AWVALID(M_AXI_GP0_AWVALID),
-        .M_AXI_GP0_AWREADY(M_AXI_GP0_AWREADY),
+        .S_AXI_AWID(S_AXI_AWID),
+        .S_AXI_AWADDR(S_AXI_AWADDR),
+        .S_AXI_AWLEN(S_AXI_AWLEN),
+        .S_AXI_AWSIZE(S_AXI_AWSIZE),
+        .S_AXI_AWBURST(S_AXI_AWBURST),
+        .S_AXI_AWVALID(S_AXI_AWVALID),
+        .S_AXI_AWREADY(S_AXI_AWREADY),
 
-        .M_AXI_GP0_WDATA(M_AXI_GP0_WDATA),
-        .M_AXI_GP0_WSTRB(M_AXI_GP0_WSTRB),
-        .M_AXI_GP0_WLAST(M_AXI_GP0_WLAST),
-        .M_AXI_GP0_WVALID(M_AXI_GP0_WVALID),
-        .M_AXI_GP0_WREADY(M_AXI_GP0_WREADY),
+        .S_AXI_WDATA(S_AXI_WDATA),
+        .S_AXI_WSTRB(S_AXI_WSTRB),
+        .S_AXI_WLAST(S_AXI_WLAST),
+        .S_AXI_WVALID(S_AXI_WVALID),
+        .S_AXI_WREADY(S_AXI_WREADY),
 
-        .M_AXI_GP0_RID(M_AXI_GP0_RID),
-        .M_AXI_GP0_RDATA(M_AXI_GP0_RDATA),
-        .M_AXI_GP0_RRESP(M_AXI_GP0_RRESP),
-        .M_AXI_GP0_RLAST(M_AXI_GP0_RLAST),
-        .M_AXI_GP0_RVALID(M_AXI_GP0_RVALID),
-        .M_AXI_GP0_RREADY(M_AXI_GP0_RREADY),
+        .S_AXI_RID(S_AXI_RID),
+        .S_AXI_RDATA(S_AXI_RDATA),
+        .S_AXI_RRESP(S_AXI_RRESP),
+        .S_AXI_RLAST(S_AXI_RLAST),
+        .S_AXI_RVALID(S_AXI_RVALID),
+        .S_AXI_RREADY(S_AXI_RREADY),
 
-        .M_AXI_GP0_BID(M_AXI_GP0_BID),
-        .M_AXI_GP0_BRESP(M_AXI_GP0_BRESP),
-        .M_AXI_GP0_BVALID(M_AXI_GP0_BVALID),
-        .M_AXI_GP0_BREADY(M_AXI_GP0_BREADY),
+        .S_AXI_BID(S_AXI_BID),
+        .S_AXI_BRESP(S_AXI_BRESP),
+        .S_AXI_BVALID(S_AXI_BVALID),
+        .S_AXI_BREADY(S_AXI_BREADY),
 
-        .S_AXI_HP0_ARID(S_AXI_HP0_ARID),
-        .S_AXI_HP0_ARADDR(S_AXI_HP0_ARADDR),
-        .S_AXI_HP0_ARLEN(S_AXI_HP0_ARLEN),
-        .S_AXI_HP0_ARSIZE(S_AXI_HP0_ARSIZE),
-        .S_AXI_HP0_ARBURST(S_AXI_HP0_ARBURST),
-        .S_AXI_HP0_ARVALID(S_AXI_HP0_ARVALID),
-        .S_AXI_HP0_ARREADY(S_AXI_HP0_ARREADY),
+        .M_AXI_ARID(M_AXI_ARID),
+        .M_AXI_ARADDR(M_AXI_ARADDR),
+        .M_AXI_ARLEN(M_AXI_ARLEN),
+        .M_AXI_ARSIZE(M_AXI_ARSIZE),
+        .M_AXI_ARBURST(M_AXI_ARBURST),
+        .M_AXI_ARVALID(M_AXI_ARVALID),
+        .M_AXI_ARREADY(M_AXI_ARREADY),
 
-        .S_AXI_HP0_AWID(S_AXI_HP0_AWID),
-        .S_AXI_HP0_AWADDR(S_AXI_HP0_AWADDR),
-        .S_AXI_HP0_AWLEN(S_AXI_HP0_AWLEN),
-        .S_AXI_HP0_AWSIZE(S_AXI_HP0_AWSIZE),
-        .S_AXI_HP0_AWBURST(S_AXI_HP0_AWBURST),
-        .S_AXI_HP0_AWVALID(S_AXI_HP0_AWVALID),
-        .S_AXI_HP0_AWREADY(S_AXI_HP0_AWREADY),
+        .M_AXI_AWID(M_AXI_AWID),
+        .M_AXI_AWADDR(M_AXI_AWADDR),
+        .M_AXI_AWLEN(M_AXI_AWLEN),
+        .M_AXI_AWSIZE(M_AXI_AWSIZE),
+        .M_AXI_AWBURST(M_AXI_AWBURST),
+        .M_AXI_AWVALID(M_AXI_AWVALID),
+        .M_AXI_AWREADY(M_AXI_AWREADY),
 
-        .S_AXI_HP0_WDATA(S_AXI_HP0_WDATA),
-        .S_AXI_HP0_WSTRB(S_AXI_HP0_WSTRB),
-        .S_AXI_HP0_WLAST(S_AXI_HP0_WLAST),
-        .S_AXI_HP0_WVALID(S_AXI_HP0_WVALID),
-        .S_AXI_HP0_WREADY(S_AXI_HP0_WREADY),
+        .M_AXI_WDATA(M_AXI_WDATA),
+        .M_AXI_WSTRB(M_AXI_WSTRB),
+        .M_AXI_WLAST(M_AXI_WLAST),
+        .M_AXI_WVALID(M_AXI_WVALID),
+        .M_AXI_WREADY(M_AXI_WREADY),
 
-        .S_AXI_HP0_RID(S_AXI_HP0_RID),
-        .S_AXI_HP0_RDATA(S_AXI_HP0_RDATA),
-        .S_AXI_HP0_RRESP(S_AXI_HP0_RRESP),
-        .S_AXI_HP0_RLAST(S_AXI_HP0_RLAST),
-        .S_AXI_HP0_RVALID(S_AXI_HP0_RVALID),
-        .S_AXI_HP0_RREADY(S_AXI_HP0_RREADY),
+        .M_AXI_RID(M_AXI_RID),
+        .M_AXI_RDATA(M_AXI_RDATA),
+        .M_AXI_RRESP(M_AXI_RRESP),
+        .M_AXI_RLAST(M_AXI_RLAST),
+        .M_AXI_RVALID(M_AXI_RVALID),
+        .M_AXI_RREADY(M_AXI_RREADY),
 
-        .S_AXI_HP0_BID(S_AXI_HP0_BID),
-        .S_AXI_HP0_BRESP(S_AXI_HP0_BRESP),
-        .S_AXI_HP0_BVALID(S_AXI_HP0_BVALID),
-        .S_AXI_HP0_BREADY(S_AXI_HP0_BREADY)
+        .M_AXI_BID(M_AXI_BID),
+        .M_AXI_BRESP(M_AXI_BRESP),
+        .M_AXI_BVALID(M_AXI_BVALID),
+        .M_AXI_BREADY(M_AXI_BREADY)
     );
 
     // ACLK
@@ -194,38 +194,38 @@ module tb_axi_ooo_top;
         begin
             ARESETn = 1'b0;
 
-            M_AXI_GP0_ARID = '0;
-            M_AXI_GP0_ARADDR = '0;
-            M_AXI_GP0_ARLEN = '0;
-            M_AXI_GP0_ARSIZE = 3'b010;
-            M_AXI_GP0_ARBURST = 2'b01;
-            M_AXI_GP0_ARVALID = 1'b0;
+            S_AXI_ARID = '0;
+            S_AXI_ARADDR = '0;
+            S_AXI_ARLEN = '0;
+            S_AXI_ARSIZE = 3'b010;
+            S_AXI_ARBURST = 2'b01;
+            S_AXI_ARVALID = 1'b0;
 
-            M_AXI_GP0_AWID = '0;
-            M_AXI_GP0_AWADDR = '0;
-            M_AXI_GP0_AWLEN = '0;
-            M_AXI_GP0_AWSIZE = 3'b010;
-            M_AXI_GP0_AWBURST = 2'b01;
-            M_AXI_GP0_AWVALID = 1'b0;
+            S_AXI_AWID = '0;
+            S_AXI_AWADDR = '0;
+            S_AXI_AWLEN = '0;
+            S_AXI_AWSIZE = 3'b010;
+            S_AXI_AWBURST = 2'b01;
+            S_AXI_AWVALID = 1'b0;
 
-            M_AXI_GP0_WDATA = '0;
-            M_AXI_GP0_WSTRB = '1;
-            M_AXI_GP0_WLAST = 1'b0;
-            M_AXI_GP0_WVALID = 1'b0;
-            M_AXI_GP0_RREADY = 1'b1;
-            M_AXI_GP0_BREADY = 1'b1;
+            S_AXI_WDATA = '0;
+            S_AXI_WSTRB = '1;
+            S_AXI_WLAST = 1'b0;
+            S_AXI_WVALID = 1'b0;
+            S_AXI_RREADY = 1'b1;
+            S_AXI_BREADY = 1'b1;
 
-            S_AXI_HP0_ARREADY = 1'b1;
-            S_AXI_HP0_AWREADY = 1'b1;
-            S_AXI_HP0_WREADY = 1'b1;
-            S_AXI_HP0_RID = '0;
-            S_AXI_HP0_RDATA = '0;
-            S_AXI_HP0_RRESP = 2'b00;
-            S_AXI_HP0_RLAST = 1'b0;
-            S_AXI_HP0_RVALID = 1'b0;
-            S_AXI_HP0_BID = '0;
-            S_AXI_HP0_BRESP = 2'b00;
-            S_AXI_HP0_BVALID = 1'b0;
+            M_AXI_ARREADY = 1'b1;
+            M_AXI_AWREADY = 1'b1;
+            M_AXI_WREADY = 1'b1;
+            M_AXI_RID = '0;
+            M_AXI_RDATA = '0;
+            M_AXI_RRESP = 2'b00;
+            M_AXI_RLAST = 1'b0;
+            M_AXI_RVALID = 1'b0;
+            M_AXI_BID = '0;
+            M_AXI_BRESP = 2'b00;
+            M_AXI_BVALID = 1'b0;
 
             expected_read_beats = 0;
             observed_read_beats = 0;
@@ -264,15 +264,15 @@ module tb_axi_ooo_top;
             ar_tr.set_fixed(target_id, target_addr, target_len);
 
             @(posedge ACLK);
-            M_AXI_GP0_ARID <= ar_tr.id;
-            M_AXI_GP0_ARADDR <= ar_tr.addr;
-            M_AXI_GP0_ARLEN <= ar_tr.len;
-            M_AXI_GP0_ARSIZE <= ar_tr.size;
-            M_AXI_GP0_ARBURST <= ar_tr.burst;
-            M_AXI_GP0_ARVALID <= ar_tr.valid;
-            while (!M_AXI_GP0_ARREADY) @(posedge ACLK);
+            S_AXI_ARID <= ar_tr.id;
+            S_AXI_ARADDR <= ar_tr.addr;
+            S_AXI_ARLEN <= ar_tr.len;
+            S_AXI_ARSIZE <= ar_tr.size;
+            S_AXI_ARBURST <= ar_tr.burst;
+            S_AXI_ARVALID <= ar_tr.valid;
+            while (!S_AXI_ARREADY) @(posedge ACLK);
             @(posedge ACLK);
-            M_AXI_GP0_ARVALID <= 1'b0;
+            S_AXI_ARVALID <= 1'b0;
             expected_read_beats += ar_tr.len + 1;
         end
     endtask
@@ -302,15 +302,15 @@ module tb_axi_ooo_top;
             req.burst = aw_tr.burst;
 
             @(posedge ACLK);
-            M_AXI_GP0_AWID <= req.id;
-            M_AXI_GP0_AWADDR <= req.addr;
-            M_AXI_GP0_AWLEN <= req.len;
-            M_AXI_GP0_AWSIZE <= req.size;
-            M_AXI_GP0_AWBURST <= req.burst;
-            M_AXI_GP0_AWVALID <= 1'b1;
-            while (!M_AXI_GP0_AWREADY) @(posedge ACLK);
+            S_AXI_AWID <= req.id;
+            S_AXI_AWADDR <= req.addr;
+            S_AXI_AWLEN <= req.len;
+            S_AXI_AWSIZE <= req.size;
+            S_AXI_AWBURST <= req.burst;
+            S_AXI_AWVALID <= 1'b1;
+            while (!S_AXI_AWREADY) @(posedge ACLK);
             @(posedge ACLK);
-            M_AXI_GP0_AWVALID <= 1'b0;
+            S_AXI_AWVALID <= 1'b0;
             // 여기서 push_back 함수를 통해 (SYSTEMVERILOG ONLY) req를 담는거임.
             write_req_q.push_back(req);
             expected_w_beats += req.len + 1;
@@ -331,17 +331,17 @@ module tb_axi_ooo_top;
                 w_tr.set_fixed(target_data, target_last);
 
                 @(posedge ACLK);
-                M_AXI_GP0_WDATA <= w_tr.data;
-                M_AXI_GP0_WSTRB <= w_tr.strb;
-                M_AXI_GP0_WLAST <= w_tr.last;
-                M_AXI_GP0_WVALID <= w_tr.valid;
-                while (!M_AXI_GP0_WREADY) @(posedge ACLK);
+                S_AXI_WDATA <= w_tr.data;
+                S_AXI_WSTRB <= w_tr.strb;
+                S_AXI_WLAST <= w_tr.last;
+                S_AXI_WVALID <= w_tr.valid;
+                while (!S_AXI_WREADY) @(posedge ACLK);
             end
 
             @(posedge ACLK);
-            M_AXI_GP0_WVALID <= 1'b0;
-            M_AXI_GP0_WLAST <= 1'b0;
-            M_AXI_GP0_WDATA <= '0;
+            S_AXI_WVALID <= 1'b0;
+            S_AXI_WLAST <= 1'b0;
+            S_AXI_WDATA <= '0;
         end
     endtask
 
@@ -361,19 +361,19 @@ module tb_axi_ooo_top;
                 r_tr.set_fixed(target_id, target_data, target_last);
 
                 @(posedge ACLK);
-                S_AXI_HP0_RID <= r_tr.id;
-                S_AXI_HP0_RDATA <= r_tr.data;
-                S_AXI_HP0_RRESP <= r_tr.resp;
-                S_AXI_HP0_RLAST <= r_tr.last;
-                S_AXI_HP0_RVALID <= r_tr.valid;
-                while (!S_AXI_HP0_RREADY) @(posedge ACLK);
+                M_AXI_RID <= r_tr.id;
+                M_AXI_RDATA <= r_tr.data;
+                M_AXI_RRESP <= r_tr.resp;
+                M_AXI_RLAST <= r_tr.last;
+                M_AXI_RVALID <= r_tr.valid;
+                while (!M_AXI_RREADY) @(posedge ACLK);
             end
 
             @(posedge ACLK);
-            S_AXI_HP0_RVALID <= 1'b0;
-            S_AXI_HP0_RLAST <= 1'b0;
-            S_AXI_HP0_RDATA <= '0;
-            S_AXI_HP0_RID <= '0;
+            M_AXI_RVALID <= 1'b0;
+            M_AXI_RLAST <= 1'b0;
+            M_AXI_RDATA <= '0;
+            M_AXI_RID <= '0;
         end
     endtask
 
@@ -384,16 +384,16 @@ module tb_axi_ooo_top;
             @(posedge ACLK);
             if (!ARESETn) begin
                 hp_read_q.delete();
-                S_AXI_HP0_ARREADY <= 1'b1;
+                M_AXI_ARREADY <= 1'b1;
             end
             else begin
-                S_AXI_HP0_ARREADY <= (cycle_cnt[3:2] != 2'b10); // cycle_cnt 값 참조하여 지정
-                if (S_AXI_HP0_ARVALID && S_AXI_HP0_ARREADY) begin
-                    req.id = S_AXI_HP0_ARID;
-                    req.addr = S_AXI_HP0_ARADDR;
-                    req.len = S_AXI_HP0_ARLEN;
-                    req.size = S_AXI_HP0_ARSIZE;
-                    req.burst = S_AXI_HP0_ARBURST;
+                M_AXI_ARREADY <= (cycle_cnt[3:2] != 2'b10); // cycle_cnt 값 참조하여 지정
+                if (M_AXI_ARVALID && M_AXI_ARREADY) begin
+                    req.id = M_AXI_ARID;
+                    req.addr = M_AXI_ARADDR;
+                    req.len = M_AXI_ARLEN;
+                    req.size = M_AXI_ARSIZE;
+                    req.burst = M_AXI_ARBURST;
                     hp_read_q.push_back(req);
                     observed_ar++;
                 end
@@ -406,7 +406,7 @@ module tb_axi_ooo_top;
         wait (ARESETn);
         forever begin
             @(posedge ACLK);
-            if (hp_read_q.size() != 0 && !S_AXI_HP0_RVALID) begin
+            if (hp_read_q.size() != 0 && !M_AXI_RVALID) begin
                 req = hp_read_q.pop_front();
                 repeat (2) @(posedge ACLK); // 2 CLK 지나고
                 send_r_burst(req);  // 값을 보내줌.
@@ -423,23 +423,23 @@ module tb_axi_ooo_top;
 
             if (!ARESETn) begin
                 hp_write_q.delete();
-                S_AXI_HP0_BID <= '0;
-                S_AXI_HP0_BRESP <= 2'b00;
-                S_AXI_HP0_BVALID <= 1'b0;
+                M_AXI_BID <= '0;
+                M_AXI_BRESP <= 2'b00;
+                M_AXI_BVALID <= 1'b0;
             end
             else begin
-                if (S_AXI_HP0_BVALID) begin
-                    if (S_AXI_HP0_BREADY) begin
-                        S_AXI_HP0_BID <= '0;
-                        S_AXI_HP0_BRESP <= 2'b00;
-                        S_AXI_HP0_BVALID <= 1'b0;
+                if (M_AXI_BVALID) begin
+                    if (M_AXI_BREADY) begin
+                        M_AXI_BID <= '0;
+                        M_AXI_BRESP <= 2'b00;
+                        M_AXI_BVALID <= 1'b0;
                     end
                 end
-                else if (S_AXI_HP0_WVALID && S_AXI_HP0_WREADY && S_AXI_HP0_WLAST && (hp_write_q.size() != 0)) begin
+                else if (M_AXI_WVALID && M_AXI_WREADY && M_AXI_WLAST && (hp_write_q.size() != 0)) begin
                     req = hp_write_q.pop_front();
-                    S_AXI_HP0_BID <= req.id;
-                    S_AXI_HP0_BRESP <= 2'b00;
-                    S_AXI_HP0_BVALID <= 1'b1;
+                    M_AXI_BID <= req.id;
+                    M_AXI_BRESP <= 2'b00;
+                    M_AXI_BVALID <= 1'b1;
                 end
             end
         end
@@ -449,34 +449,34 @@ module tb_axi_ooo_top;
         req_t aw_req;
 
         if (ARESETn) begin
-            S_AXI_HP0_AWREADY <= (cycle_cnt[2:1] != 2'b11);
-            S_AXI_HP0_WREADY <= (cycle_cnt[3:1] != 3'b101);
+            M_AXI_AWREADY <= (cycle_cnt[2:1] != 2'b11);
+            M_AXI_WREADY <= (cycle_cnt[3:1] != 3'b101);
 
-            if (S_AXI_HP0_AWVALID && S_AXI_HP0_AWREADY) begin
-                aw_req.id = S_AXI_HP0_AWID;
-                aw_req.addr = S_AXI_HP0_AWADDR;
-                aw_req.len = S_AXI_HP0_AWLEN;
-                aw_req.size = S_AXI_HP0_AWSIZE;
-                aw_req.burst = S_AXI_HP0_AWBURST;
+            if (M_AXI_AWVALID && M_AXI_AWREADY) begin
+                aw_req.id = M_AXI_AWID;
+                aw_req.addr = M_AXI_AWADDR;
+                aw_req.len = M_AXI_AWLEN;
+                aw_req.size = M_AXI_AWSIZE;
+                aw_req.burst = M_AXI_AWBURST;
                 hp_write_q.push_back(aw_req);
                 observed_aw++;
             end
 
-            if (S_AXI_HP0_WVALID && S_AXI_HP0_WREADY) begin
+            if (M_AXI_WVALID && M_AXI_WREADY) begin
                 observed_w_beats++;
             end
 
-            if (M_AXI_GP0_RVALID && M_AXI_GP0_RREADY) begin
+            if (S_AXI_RVALID && S_AXI_RREADY) begin
                 observed_read_beats++;
-                if (M_AXI_GP0_RRESP != 2'b00) begin
-                    $error("Unexpected RRESP %0b at time %0t", M_AXI_GP0_RRESP, $time);
+                if (S_AXI_RRESP != 2'b00) begin
+                    $error("Unexpected RRESP %0b at time %0t", S_AXI_RRESP, $time);
                 end
             end
 
-            if (M_AXI_GP0_BVALID && M_AXI_GP0_BREADY) begin
+            if (S_AXI_BVALID && S_AXI_BREADY) begin
                 observed_b++;
-                if (M_AXI_GP0_BRESP != 2'b00) begin
-                    $error("Unexpected BRESP %0b at time %0t", M_AXI_GP0_BRESP, $time);
+                if (S_AXI_BRESP != 2'b00) begin
+                    $error("Unexpected BRESP %0b at time %0t", S_AXI_BRESP, $time);
                 end
             end
         end
