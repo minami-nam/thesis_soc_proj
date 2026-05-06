@@ -33,7 +33,7 @@ module axi_ooo_read_queue_cache #(
     reg [LEN_WIDTH-1:0] reg_len[0:NUM_READ_IDTABLE-1];
     reg [2:0] reg_size[0:NUM_READ_IDTABLE-1];
     reg [1:0] reg_burst[0:NUM_READ_IDTABLE-1];
-    reg [$clog2(NUM_READ_IDTABLE)-1:0] cnt;
+    reg [$clog2(NUM_READ_IDTABLE)-1:0] cnt, wr_ptr, rd_ptr;
 
     // 데이터 입출력 조건
     wire data_in = data_in_valid&data_in_ready;
@@ -60,50 +60,57 @@ module axi_ooo_read_queue_cache #(
         end
     end
 
-    // data in과 data out 발생 시 FIFO 동작 구현
+    // ptr 관련
+
+    always @(posedge ACLK or negedge ARESETn) begin
+        if (!ARESETn) begin
+            wr_ptr <= '0;
+            rd_ptr <= '0;
+        end
+        else begin
+            if (data_in) begin
+               if (wr_ptr==NUM_READ_IDTABLE-1) wr_ptr <= '0;
+               else wr_ptr <= wr_ptr + 1; 
+            end
+            else if (data_out) begin
+                if (rd_ptr==NUM_READ_IDTABLE-1) rd_ptr <= '0;
+                else rd_ptr <= rd_ptr + 1;
+            end
+            else begin
+                rd_ptr <= rd_ptr;
+                wr_ptr <= wr_ptr;
+            end
+        end
+    end
+
+    // data write 관련 
+
     always @(posedge ACLK or negedge ARESETn) begin
         if (!ARESETn) begin
             for (int i=0; i<NUM_READ_IDTABLE; i++) begin
                 reg_id[i] <= '0;
                 reg_addr[i] <= '0;
-                reg_burst[i] <= '0;
                 reg_len[i] <= '0;
                 reg_size[i] <= '0;
-            end           
-        
+                reg_burst[i] <= '0;
+            end
         end
         else begin
             if (data_in) begin
-                reg_id[cnt] <= i_id;
-                reg_addr[cnt] <= i_addr;
-                reg_burst[cnt] <= i_burst;
-                reg_len[cnt] <= i_len;
-                reg_size[cnt] <= i_size;
-            end
-            else if (data_out) begin
-                for (int i=1; i<NUM_READ_IDTABLE; i++) begin
-                    reg_id[i-1] <= reg_id[i];
-                    reg_addr[i-1] <= reg_addr[i];
-                    reg_burst[i-1] <= reg_burst[i];
-                    reg_len[i-1] <= reg_len[i];
-                    reg_size[i-1] <= reg_size[i];
-                end
-            end
-            else begin
-                reg_id[cnt] <= reg_id[cnt];
-                reg_addr[cnt] <= reg_addr[cnt];
-                reg_burst[cnt] <= reg_burst[cnt];
-                reg_len[cnt] <= reg_len[cnt];
-                reg_size[cnt] <= reg_size[cnt];
+                reg_addr[wr_ptr] <= i_addr;
+                reg_id[wr_ptr] <= i_id;
+                reg_len[wr_ptr] <= i_len;
+                reg_size[wr_ptr] <= i_size;
+                reg_burst[wr_ptr] <= i_burst;
             end
         end
     end
 
-    assign o_id = (data_out_valid) ? reg_id[0] : '0;
-    assign o_addr = (data_out_valid) ? reg_addr[0] : '0;
-    assign o_len = (data_out_valid) ? reg_len[0] : '0;
-    assign o_size = (data_out_valid) ? reg_size[0] : '0;
-    assign o_burst = (data_out_valid) ? reg_burst[0] : '0;
+    assign o_id = (data_out_valid) ? reg_id[rd_ptr] : '0;
+    assign o_addr = (data_out_valid) ? reg_addr[rd_ptr] : '0;
+    assign o_len = (data_out_valid) ? reg_len[rd_ptr] : '0;
+    assign o_size = (data_out_valid) ? reg_size[rd_ptr] : '0;
+    assign o_burst = (data_out_valid) ? reg_burst[rd_ptr] : '0;
 
     
 
@@ -117,6 +124,8 @@ module axi_ooo_read_queue_cache #(
                 reg_size[i] = '0;
             end  
             cnt = '0;
+            wr_ptr = 0;
+            rd_ptr = '0;
         end
     `endif
 
