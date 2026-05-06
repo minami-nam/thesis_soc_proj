@@ -1,29 +1,186 @@
-*.arrow
-*.txt
-*.model
-*.csv
-*.log
+############################################################
+# Vivado / Xilinx generated directories
+############################################################
+
+# Vivado internal / cache directories
+.Xil/
+*.cache/
+*.hw/
+*.ip_user_files/
+*.runs/
+*.sim/
+*.gen/
+
+# Xilinx simulation directory
+xsim.dir/
+
+# Vivado block design generated products
+*.srcs/sources_1/bd/*/ip/
+*.srcs/sources_1/bd/*/ipshared/
+*.srcs/sources_1/bd/*/synth/
+*.srcs/sources_1/bd/*/sim/
+*.srcs/sources_1/bd/*/hw_handoff/
+*.srcs/sources_1/bd/*/ui/
+*.srcs/sources_1/bd/*/*.bxml
+
+
+############################################################
+# Vivado / Xilinx generated files
+############################################################
+
+# Logs / journals / messages
 *.jou
-*.bit
-*.mcs
-*.xpr
-*.lpr
-*.wdf
-*.db
-*.dcp
-*.tcl
-*.vds
-*.xml
-*.bat
-*.pb
-*.rst
-*.sh
-*.ini
-*.dbq
-*.prj
-*.dbg
-*.mem
-*.reloc
-xsim.*
-*.wpc
+*.log
+*.str
+*.xmsgs
+
+# Simulation outputs
 *.wdb
+*.vcd
+*.fst
+*.vpd
+*.saif
+*.wcfg
+
+# Design checkpoints / reports / generated database files
+*.dcp
+*.rpt
+*.pb
+
+# Generated hardware outputs
+*.bit
+*.bin
+*.ltx
+*.mcs
+*.prm
+*.mmi
+*.hdf
+*.xsa
+
+# WebTalk / usage statistics
+webtalk*.jou
+webtalk*.log
+usage_statistics_webtalk.*
+
+# IP generated output products
+*_stub.v
+*_stub.vhdl
+*_funcsim.v
+*_funcsim.vhdl
+*_sim_netlist.v
+*_sim_netlist.vhdl
+*_synth.v
+*_synth.vhdl
+
+
+############################################################
+# Vivado temporary / backup files
+############################################################
+
+*.backup*
+*.bak
+*.tmp
+*.orig
+*.old
+*~
+.#*
+
+
+############################################################
+# Keep HDL / constraint / script source files
+############################################################
+
+!*.v
+!*.sv
+!*.vh
+!*.svh
+!*.vhd
+!*.vhdl
+!*.xdc
+!*.tcl
+
+
+############################################################
+# Python generated files
+############################################################
+
+__pycache__/
+*.py[cod]
+*$py.class
+
+.ipynb_checkpoints/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+
+############################################################
+# Python virtual environments
+############################################################
+
+.venv/
+venv/
+env/
+ENV/
+
+
+############################################################
+# Python ML / experiment outputs
+############################################################
+
+runs/
+outputs/
+checkpoints/
+weights/
+wandb/
+mlruns/
+lightning_logs/
+
+*.pt
+*.pth
+*.ckpt
+*.onnx
+*.npz
+*.npy
+
+
+############################################################
+# Dataset / large generated folders
+############################################################
+
+datasets/
+dataset/
+data/
+saved_results/
+results/
+generated/
+
+
+############################################################
+# Documents / reports policy
+############################################################
+
+# Keep Word / PDF / image reports by default.
+# Do not ignore:
+# *.docx
+# *.pdf
+# *.png
+# *.jpg
+# *.jpeg
+# *.bmp
+# *.tiff
+# *.webp
+
+
+############################################################
+# Editor / OS files
+############################################################
+
+.DS_Store
+Thumbs.db
+
+.vscode/*
+!.vscode/settings.json
+!.vscode/extensions.json
+
+.idea/
