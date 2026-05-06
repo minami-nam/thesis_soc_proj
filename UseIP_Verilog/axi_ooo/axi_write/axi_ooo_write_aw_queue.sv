@@ -30,7 +30,8 @@ module axi_ooo_aw_queue #(
     output o_AWVALID
 );
 
-    localparam int CNT_WIDTH = $clog2(NUM_WRITE_AWQUEUE);
+    localparam int PTR_WIDTH = (NUM_WRITE_AWQUEUE <= 1) ? 1 : $clog2(NUM_WRITE_AWQUEUE);
+    localparam int CNT_WIDTH = (NUM_WRITE_AWQUEUE <= 1) ? 1 : $clog2(NUM_WRITE_AWQUEUE + 1);
     localparam int LAST_PTR = NUM_WRITE_AWQUEUE-1;
 
     // wire와 reg 미리 선언
@@ -44,7 +45,11 @@ module axi_ooo_aw_queue #(
     reg [2:0] reg_AWSIZE[0:NUM_WRITE_AWQUEUE-1];
     reg [1:0] reg_AWBURST[0:NUM_WRITE_AWQUEUE-1];
 
-    reg [CNT_WIDTH-1:0] cnt, rd_ptr, wr_ptr;
+    reg [CNT_WIDTH-1:0] cnt;
+    reg [PTR_WIDTH-1:0] rd_ptr, wr_ptr;
+
+    wire queue_full = (cnt == CNT_WIDTH'(NUM_WRITE_AWQUEUE));
+    wire queue_empty = (cnt == '0);
 
     // pointer, counter 관련 
     always @(posedge ACLK or negedge ARESETn) begin
@@ -56,18 +61,22 @@ module axi_ooo_aw_queue #(
         else begin
             case ({aw_in, aw_out})
                 2'b00: cnt <= cnt;
-                2'b01: cnt <= cnt - 1'b1;
-                2'b10: cnt <= cnt + 1'b1;
+                2'b01: begin
+                    if (!queue_empty) cnt <= cnt - 1'b1;
+                end
+                2'b10: begin
+                    if (!queue_full) cnt <= cnt + 1'b1;
+                end
                 2'b11: cnt <= cnt;
             endcase
 
             if (aw_out) begin
-                if (rd_ptr == LAST_PTR) rd_ptr <= '0;
+                if (rd_ptr == PTR_WIDTH'(LAST_PTR)) rd_ptr <= '0;
                 else rd_ptr <= rd_ptr + 1'b1;
             end
 
             if (aw_in) begin
-                if (wr_ptr == LAST_PTR) wr_ptr <= '0;
+                if (wr_ptr == PTR_WIDTH'(LAST_PTR)) wr_ptr <= '0;
                 else wr_ptr <= wr_ptr + 1'b1;
             end
         end
@@ -95,10 +104,10 @@ module axi_ooo_aw_queue #(
         end
     end
 
-    assign i_AWREADY = (cnt!=LAST_PTR);
+    assign i_AWREADY = !queue_full || aw_out;
 
     // DATA OUT
-    assign o_AWVALID = (cnt!=0);
+    assign o_AWVALID = !queue_empty;
     assign o_AWID = (o_AWVALID) ? reg_AWID[rd_ptr] : '0;
     assign o_AWADDR = (o_AWVALID) ? reg_AWADDR[rd_ptr] : '0;
     assign o_AWLEN = (o_AWVALID) ? reg_AWLEN[rd_ptr] : '0;

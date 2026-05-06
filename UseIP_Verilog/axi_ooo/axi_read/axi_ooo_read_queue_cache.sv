@@ -33,13 +33,17 @@ module axi_ooo_read_queue_cache #(
     reg [LEN_WIDTH-1:0] reg_len[0:NUM_READ_IDTABLE-1];
     reg [2:0] reg_size[0:NUM_READ_IDTABLE-1];
     reg [1:0] reg_burst[0:NUM_READ_IDTABLE-1];
-    reg [$clog2(NUM_READ_IDTABLE)-1:0] cnt, wr_ptr, rd_ptr;
+    localparam int PTR_WIDTH = (NUM_READ_IDTABLE <= 1) ? 1 : $clog2(NUM_READ_IDTABLE);
+    localparam int CNT_WIDTH = (NUM_READ_IDTABLE <= 1) ? 1 : $clog2(NUM_READ_IDTABLE + 1);
+
+    reg [CNT_WIDTH-1:0] cnt;
+    reg [PTR_WIDTH-1:0] wr_ptr, rd_ptr;
 
     // 데이터 입출력 조건
     wire data_in = data_in_valid&data_in_ready;
     wire data_out = data_out_valid&data_out_ready;
 
-    assign data_in_ready = (cnt<NUM_READ_IDTABLE) ? ON : OFF;
+    assign data_in_ready = ((cnt < CNT_WIDTH'(NUM_READ_IDTABLE)) || data_out) ? ON : OFF;
     assign data_out_valid = (cnt!=0) ? ON : OFF;
 
     // cnt 관련
@@ -53,7 +57,7 @@ module axi_ooo_read_queue_cache #(
                     if (cnt!=0) cnt <= cnt-1;
                 end
                 2'b10 : begin   // data in만 발생
-                    if (cnt<NUM_READ_IDTABLE) cnt <= cnt+1;
+                    if (cnt<CNT_WIDTH'(NUM_READ_IDTABLE)) cnt <= cnt+1;
                 end
                 2'b11 : cnt <= cnt; // data in out 동시 발생
             endcase
@@ -69,16 +73,13 @@ module axi_ooo_read_queue_cache #(
         end
         else begin
             if (data_in) begin
-               if (wr_ptr==NUM_READ_IDTABLE-1) wr_ptr <= '0;
-               else wr_ptr <= wr_ptr + 1; 
+               if (wr_ptr==PTR_WIDTH'(NUM_READ_IDTABLE-1)) wr_ptr <= '0;
+               else wr_ptr <= wr_ptr + 1;
             end
-            else if (data_out) begin
-                if (rd_ptr==NUM_READ_IDTABLE-1) rd_ptr <= '0;
+
+            if (data_out) begin
+                if (rd_ptr==PTR_WIDTH'(NUM_READ_IDTABLE-1)) rd_ptr <= '0;
                 else rd_ptr <= rd_ptr + 1;
-            end
-            else begin
-                rd_ptr <= rd_ptr;
-                wr_ptr <= wr_ptr;
             end
         end
     end

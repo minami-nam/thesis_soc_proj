@@ -70,7 +70,7 @@ module axi_ooo_aw_scheduler #(
         
         // 각 ID 별로 몇 번 Data Out이 진행되었는지 체크 + previous 값도 체크
 
-        assign i_AWREADY = cache_has_empty || aw_out;
+        assign i_AWREADY = (cache_has_empty || aw_out) && (!o_AWVALID || o_AWREADY);
         assign o_AWVALID = cache_has_valid;
         assign o_AWID = (o_AWVALID) ? reg_AWID[issue_index] : '0;
         assign o_AWADDR = (o_AWVALID) ? reg_AWADDR[issue_index] : '0;
@@ -82,63 +82,40 @@ module axi_ooo_aw_scheduler #(
         assign write_index = (!cache_has_empty && aw_out) ? issue_index : fill_index;
 
         // state 판별을 위한 logic
+        always @(*) begin
+            cache_has_empty = OFF;
+            cache_has_valid = OFF;
+            has_same_id = OFF;
+            has_other_id = OFF;
+            max_count_found = OFF;
+            fill_index = '0;
+            same_id_index = '0;
+            max_count_index = '0;
+            max_count_value = '0;
 
-        // 수정 1. seq하게 분리함.
-        always @(posedge ACLK or negedge ARESETn) begin
-            if (!ARESETn) begin
-                cache_has_empty <= OFF;
-                fill_index <= '0;
-            end
-            else begin
-                for (int i=0; i<NUM_WRITE_SCHEDULER; i++) begin
-                    if (!reg_valid[i] && !cache_has_empty) begin
-                        cache_has_empty <= ON;
-                        fill_index <= INDEX_WIDTH'(i);
-                    end
+            for (int i=0; i<NUM_WRITE_SCHEDULER; i++) begin
+                if (!reg_valid[i] && !cache_has_empty) begin
+                    cache_has_empty = ON;
+                    fill_index = INDEX_WIDTH'(i);
                 end
-            end
-        end
 
+                if (reg_valid[i]) begin
+                    cache_has_valid = ON;
 
-        always  @(posedge ACLK or negedge ARESETn) begin
-            if (!ARESETn) begin
-                cache_has_valid <= OFF;
-                max_count_found <= OFF;
-                max_count_value <= '0;
-                max_count_index <= '0;
-                has_same_id <= OFF;
-                has_other_id <= OFF;
-            end
-            else begin
-                for (int i=0; i<NUM_WRITE_SCHEDULER; i++) begin
-                    if (reg_valid[i]) begin
-                        cache_has_valid <= ON;
-                        if ((reg_AWID[i] == previous_o_awid) && !has_same_id) begin
-                            has_same_id <= ON;
-                            same_id_index <= INDEX_WIDTH'(i);
-                        end
-
-                        if (reg_AWID[i] != previous_o_awid) begin   // 현재 출력과 previous 출력이 다른 경우 cnt를 초기화 시키는 방향으로 가야함.
-                            if (!has_other_id || (cnt_awid_icheck[reg_AWID[i]] > max_count_value)) begin
-                                max_count_found <= ON;
-                                max_count_value <= cnt_awid_icheck[reg_AWID[i]];
-                                max_count_index <= INDEX_WIDTH'(i);
-                            end
-                            has_other_id <= ON;
-                        end
-                        else if (!has_other_id && (!max_count_found || (cnt_awid_icheck[reg_AWID[i]] > max_count_value))) begin 
-                            max_count_found <= ON;
-                            max_count_value <= cnt_awid_icheck[reg_AWID[i]];
-                            max_count_index <= INDEX_WIDTH'(i);  // 이런 방식으로 index를 구할 수 있다는 것 참조하기.
-                        end
-                        else begin
-                            max_count_found <= OFF;
-                            max_count_value <= '0;
-                            max_count_index <= '0;
-                        end
+                    if ((reg_AWID[i] == previous_o_awid) && !has_same_id) begin
+                        has_same_id = ON;
+                        same_id_index = INDEX_WIDTH'(i);
                     end
-                    else begin
-                        cache_has_valid <= OFF;
+
+                    if (reg_AWID[i] != previous_o_awid) begin
+                        has_other_id = ON;
+                    end
+
+                    if (!max_count_found ||
+                        (cnt_awid_icheck[reg_AWID[i]] > max_count_value)) begin
+                        max_count_found = ON;
+                        max_count_value = cnt_awid_icheck[reg_AWID[i]];
+                        max_count_index = INDEX_WIDTH'(i);
                     end
                 end
             end

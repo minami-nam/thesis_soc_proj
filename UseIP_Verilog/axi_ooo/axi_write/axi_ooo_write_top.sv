@@ -202,6 +202,7 @@ module axi_write_ooo #(
         .i_WSTRB(S_AXI_WSTRB),
         .i_WLAST(S_AXI_WLAST),
 
+        .aw_scheduler_valid(sched_o_awvalid),
         .aw_scheduler_fire(aw_scheduler_fire),
         .aw_scheduler_ready(order_aw_scheduler_ready),
         .i_AWID(sched_o_awid),

@@ -38,12 +38,13 @@ module axi_ooo_read_scheduler #(
         localparam INDEX_WIDTH = (NUM_READ_SCHEDULER <= 1) ? 1 : $clog2(NUM_READ_SCHEDULER);
         localparam MIN_TREE_LEVELS = $clog2(NUM_READ_SCHEDULER);
         localparam MIN_TREE_NUM_LEAF = 1 << MIN_TREE_LEVELS;
-        localparam [BANK_BITS-1:0] MAX_BANK_VALUE = {BANK_BITS{1'b1}};
+        localparam int BANK_SCORE_BITS = BANK_BITS + 1;
+        localparam [BANK_SCORE_BITS-1:0] MAX_BANK_VALUE = {BANK_SCORE_BITS{1'b1}};
 
         // min 구하는 function 만들기
-        function automatic [BANK_BITS-1:0] min_calc;
-            input [BANK_BITS-1:0] a;
-            input [BANK_BITS-1:0] b;
+        function automatic [BANK_SCORE_BITS-1:0] min_calc;
+            input [BANK_SCORE_BITS-1:0] a;
+            input [BANK_SCORE_BITS-1:0] b;
             begin
                 min_calc = (a > b) ? b : a;
             end
@@ -59,10 +60,10 @@ module axi_ooo_read_scheduler #(
 
         wire [BANK_BITS-1:0] current_bank;
         wire [BANK_BITS-1:0] bank_value[0:NUM_READ_SCHEDULER-1];
-        wire [BANK_BITS-1:0] bank_diff[0:NUM_READ_SCHEDULER-1];
-        wire [BANK_BITS-1:0] min_tree[0:MIN_TREE_LEVELS][0:MIN_TREE_NUM_LEAF-1];
+        wire [BANK_SCORE_BITS-1:0] bank_diff[0:NUM_READ_SCHEDULER-1];
+        wire [BANK_SCORE_BITS-1:0] min_tree[0:MIN_TREE_LEVELS][0:MIN_TREE_NUM_LEAF-1];
         wire [INDEX_WIDTH-1:0] min_index_tree[0:MIN_TREE_LEVELS][0:MIN_TREE_NUM_LEAF-1];
-        wire [BANK_BITS-1:0] min_bank_diff;
+        wire [BANK_SCORE_BITS-1:0] min_bank_diff;
         wire [INDEX_WIDTH-1:0] issue_index;
 
         wire data_in;
@@ -110,7 +111,7 @@ module axi_ooo_read_scheduler #(
         generate
             for (i=0; i<NUM_READ_SCHEDULER; i++) begin : BANK_AWARE_CACHE_ENTRY
                 assign bank_value[i] = reg_addr[i][WHERE_BIT_START -: BANK_BITS];
-                assign bank_diff[i] = current_bank - bank_value[i];
+                assign bank_diff[i] = {1'b0, current_bank - bank_value[i]};
             end
 
             for (i=0; i<MIN_TREE_NUM_LEAF; i++) begin : MIN_TREE_LEAF

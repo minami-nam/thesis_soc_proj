@@ -27,6 +27,7 @@ module axi_ooo_aw_write_order_queue #(
     input [DATA_WIDTH/8-1:0] i_WSTRB,
     input i_WLAST,
 
+    input aw_scheduler_valid,
     input aw_scheduler_fire,
     output aw_scheduler_ready,
     input [ID_WIDTH-1:0] i_AWID,
@@ -107,6 +108,9 @@ module axi_ooo_aw_write_order_queue #(
     reg w_scan_best_valid;
     reg [AW_INDEX_WIDTH-1:0] w_scan_best_index;
     reg [SEQ_WIDTH-1:0] w_scan_best_seq;
+    reg w_match_valid;
+    reg [AW_INDEX_WIDTH-1:0] w_match_index;
+    reg [SEQ_WIDTH-1:0] w_match_seq;
 
     reg sched_scan_busy;
     reg [AW_INDEX_WIDTH-1:0] sched_scan_index;
@@ -118,6 +122,9 @@ module axi_ooo_aw_write_order_queue #(
     reg [LEN_WIDTH-1:0] sched_req_AWLEN;
     reg [2:0] sched_req_AWSIZE;
     reg [1:0] sched_req_AWBURST;
+    reg sched_match_valid;
+    reg [AW_INDEX_WIDTH-1:0] sched_match_index;
+    reg [SEQ_WIDTH-1:0] sched_match_seq;
 
     reg [W_INDEX_WIDTH-1:0] output_read_index_reg;
     reg [W_INDEX_WIDTH-1:0] output_read_index_next;
@@ -142,40 +149,46 @@ module axi_ooo_aw_write_order_queue #(
         (W_INDEX_WIDTH'(send_index) << BURST_SHIFT) + W_INDEX_WIDTH'(send_beat);
     wire send_last_beat = w_out && (send_beat == (send_total - 1'b1));
 
-    wire [AW_INDEX_WIDTH-1:0] w_scan_index_inc =
-        (w_scan_index == AW_INDEX_WIDTH'(NUM_WRITE_ORDER_QUEUE_AW-1)) ? '0 : (w_scan_index + 1'b1);
-    wire w_scan_last = (w_scan_count == AW_SCAN_COUNT_WIDTH'(NUM_WRITE_ORDER_QUEUE_AW-1));
-    wire w_scan_entry_pending = reg_queue_valid[w_scan_index] && !reg_w_done[w_scan_index];
-    wire w_scan_entry_better =
-        w_scan_entry_pending && (!w_scan_best_valid || (reg_queue_seq[w_scan_index] < w_scan_best_seq));
-    wire w_scan_best_valid_next = w_scan_best_valid || w_scan_entry_pending;
-    wire [AW_INDEX_WIDTH-1:0] w_scan_best_index_next =
-        w_scan_entry_better ? w_scan_index : w_scan_best_index;
-    wire [SEQ_WIDTH-1:0] w_scan_best_seq_next =
-        w_scan_entry_better ? reg_queue_seq[w_scan_index] : w_scan_best_seq;
-
-    wire [AW_INDEX_WIDTH-1:0] sched_scan_index_inc =
-        (sched_scan_index == AW_INDEX_WIDTH'(NUM_WRITE_ORDER_QUEUE_AW-1)) ? '0 : (sched_scan_index + 1'b1);
-    wire sched_scan_last = (sched_scan_count == AW_SCAN_COUNT_WIDTH'(NUM_WRITE_ORDER_QUEUE_AW-1));
-    wire sched_scan_entry_match =
-        reg_queue_valid[sched_scan_index] &&
-        reg_w_done[sched_scan_index] &&
-        (reg_queue_AWID[sched_scan_index] == sched_req_AWID) &&
-        (reg_queue_AWLEN[sched_scan_index] == sched_req_AWLEN) &&
-        (reg_queue_AWSIZE[sched_scan_index] == sched_req_AWSIZE) &&
-        (reg_queue_AWBURST[sched_scan_index] == sched_req_AWBURST);
-    wire sched_scan_entry_better =
-        sched_scan_entry_match && (!sched_scan_best_valid || (reg_queue_seq[sched_scan_index] < sched_scan_best_seq));
-    wire sched_scan_best_valid_next = sched_scan_best_valid || sched_scan_entry_match;
-    wire [AW_INDEX_WIDTH-1:0] sched_scan_best_index_next =
-        sched_scan_entry_better ? sched_scan_index : sched_scan_best_index;
-    wire [SEQ_WIDTH-1:0] sched_scan_best_seq_next =
-        sched_scan_entry_better ? reg_queue_seq[sched_scan_index] : sched_scan_best_seq;
-
     // 출력 관련 서술
     assign aw_queue_ready = has_empty;
     assign aw_scheduler_ready = !send_active && sched_issue_valid;
     assign i_WREADY = active_w_valid && (active_w_count < active_w_total);
+
+    always @(*) begin
+        w_match_valid = OFF;
+        w_match_index = '0;
+        w_match_seq = '1;
+
+        for (int i = 0; i < NUM_WRITE_ORDER_QUEUE_AW; i++) begin
+            if (reg_queue_valid[i] &&
+                !reg_w_done[i] &&
+                (!w_match_valid || (reg_queue_seq[i] < w_match_seq))) begin
+                w_match_valid = ON;
+                w_match_index = AW_INDEX_WIDTH'(i);
+                w_match_seq = reg_queue_seq[i];
+            end
+        end
+    end
+
+    always @(*) begin
+        sched_match_valid = OFF;
+        sched_match_index = '0;
+        sched_match_seq = '1;
+
+        for (int i = 0; i < NUM_WRITE_ORDER_QUEUE_AW; i++) begin
+            if (reg_queue_valid[i] &&
+                reg_w_done[i] &&
+                (reg_queue_AWID[i] == i_AWID) &&
+                (reg_queue_AWLEN[i] == i_AWLEN) &&
+                (reg_queue_AWSIZE[i] == i_AWSIZE) &&
+                (reg_queue_AWBURST[i] == i_AWBURST) &&
+                (!sched_match_valid || (reg_queue_seq[i] < sched_match_seq))) begin
+                sched_match_valid = ON;
+                sched_match_index = AW_INDEX_WIDTH'(i);
+                sched_match_seq = reg_queue_seq[i];
+            end
+        end
+    end
 
     // 수정, 마진 개선
     always @(*) begin
@@ -346,88 +359,62 @@ module axi_ooo_aw_write_order_queue #(
         end
         else begin
             has_sched_target <= sched_issue_valid;
-            has_seq_min <= w_scan_best_valid;
+            has_seq_min <= w_match_valid;
 
-            if (!active_w_valid && has_w_target) begin
-                active_w_valid <= ON;
-                active_w_index <= w_target_index;
-                active_w_count <= reg_w_count[w_target_index];
-                active_w_total <= {1'b0, reg_queue_AWLEN[w_target_index]} + 1'b1;
-                active_w_last_count <= {1'b0, reg_queue_AWLEN[w_target_index]};
-                active_w_write_index <=
-                    (W_INDEX_WIDTH'(w_target_index) << BURST_SHIFT) +
-                    W_INDEX_WIDTH'(reg_w_count[w_target_index]);
-                has_w_target <= OFF;
-                min_w_seq <= '0;
-            end
-
-            if (!aw_scheduler_fire && !sched_scan_busy) begin
+            if (!aw_scheduler_valid && !sched_scan_busy) begin
                 sched_issue_valid <= OFF;
                 has_sched_target <= OFF;
+                sched_scan_best_valid <= OFF;
             end
             else if (aw_scheduler_in) begin
                 sched_issue_valid <= OFF;
             end
 
-            if (!active_w_valid && !has_w_target && !w_scan_busy) begin
-                w_scan_busy <= ON;
-                w_scan_index <= '0;
-                w_scan_count <= '0;
-                w_scan_best_valid <= OFF;
-                w_scan_best_index <= '0;
-                w_scan_best_seq <= '1;
-            end
-            else if (w_scan_busy) begin
-                w_scan_best_valid <= w_scan_best_valid_next;
-                w_scan_best_index <= w_scan_best_index_next;
-                w_scan_best_seq <= w_scan_best_seq_next;
+            w_scan_busy <= OFF;
+            w_scan_index <= '0;
+            w_scan_count <= '0;
 
-                if (w_scan_last) begin
-                    w_scan_busy <= OFF;
-                    has_w_target <= w_scan_best_valid_next;
-                    w_target_index <= w_scan_best_index_next;
-                    min_w_seq <= w_scan_best_seq_next;
+            if (!active_w_valid) begin
+                has_w_target <= w_match_valid;
+                w_target_index <= w_match_index;
+                w_scan_best_valid <= w_match_valid;
+                w_scan_best_index <= w_match_index;
+                w_scan_best_seq <= w_match_seq;
+                min_w_seq <= w_match_seq;
+
+                if (w_match_valid) begin
+                    active_w_valid <= ON;
+                    active_w_index <= w_match_index;
+                    active_w_count <= reg_w_count[w_match_index];
+                    active_w_total <= {1'b0, reg_queue_AWLEN[w_match_index]} + 1'b1;
+                    active_w_last_count <= {1'b0, reg_queue_AWLEN[w_match_index]};
+                    active_w_write_index <=
+                        (W_INDEX_WIDTH'(w_match_index) << BURST_SHIFT) +
+                        W_INDEX_WIDTH'(reg_w_count[w_match_index]);
                 end
-                else begin
-                    w_scan_index <= w_scan_index_inc;
-                    w_scan_count <= w_scan_count + 1'b1;
-                end
+            end
+            else begin
+                has_w_target <= OFF;
             end
 
-            if (!aw_scheduler_fire && sched_scan_busy) begin
-                sched_scan_busy <= OFF;
-                sched_scan_best_valid <= OFF;
-            end
-            else if (!send_active && aw_scheduler_fire && !sched_issue_valid && !sched_scan_busy) begin
-                sched_scan_busy <= ON;
-                sched_scan_index <= '0;
-                sched_scan_count <= '0;
-                sched_scan_best_valid <= OFF;
-                sched_scan_best_index <= '0;
-                sched_scan_best_seq <= '1;
+            sched_scan_busy <= OFF;
+            sched_scan_index <= '0;
+            sched_scan_count <= '0;
+
+            if (!send_active && aw_scheduler_valid && !sched_issue_valid) begin
                 sched_req_AWID <= i_AWID;
                 sched_req_AWLEN <= i_AWLEN;
                 sched_req_AWSIZE <= i_AWSIZE;
                 sched_req_AWBURST <= i_AWBURST;
-            end
-            else if (sched_scan_busy) begin
-                sched_scan_best_valid <= sched_scan_best_valid_next;
-                sched_scan_best_index <= sched_scan_best_index_next;
-                sched_scan_best_seq <= sched_scan_best_seq_next;
-
-                if (sched_scan_last) begin
-                    sched_scan_busy <= OFF;
-                    sched_issue_valid <= sched_scan_best_valid_next;
-                    sched_issue_index <= sched_scan_best_index_next;
-                    sched_issue_total <= {1'b0, sched_req_AWLEN} + 1'b1;
-                    sched_issue_read_index <= W_INDEX_WIDTH'(sched_scan_best_index_next) << BURST_SHIFT;
-                    sched_target_index <= sched_scan_best_index_next;
-                    min_sched_seq <= sched_scan_best_seq_next;
-                end
-                else begin
-                    sched_scan_index <= sched_scan_index_inc;
-                    sched_scan_count <= sched_scan_count + 1'b1;
-                end
+                sched_scan_best_valid <= sched_match_valid;
+                sched_scan_best_index <= sched_match_index;
+                sched_scan_best_seq <= sched_match_seq;
+                sched_issue_valid <= sched_match_valid;
+                sched_issue_index <= sched_match_index;
+                sched_issue_total <= {1'b0, i_AWLEN} + 1'b1;
+                sched_issue_read_index <= W_INDEX_WIDTH'(sched_match_index) << BURST_SHIFT;
+                sched_target_index <= sched_match_index;
+                min_sched_seq <= sched_match_seq;
             end
 
             if (aw_queue_in&&has_empty) begin

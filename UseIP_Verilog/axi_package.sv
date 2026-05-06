@@ -15,16 +15,16 @@ package axi_pkg;
     
     `ifdef OUT_ORDER
         // Read
-        parameter int NUM_READ_IDTABLE = 4;
-        parameter int NUM_READ_SCHEDULER = 4;
-        parameter int NUM_READ_REORDER = 4;
+        parameter int NUM_READ_IDTABLE = 16;
+        parameter int NUM_READ_SCHEDULER = 16;
+        parameter int NUM_READ_REORDER = 16;
         // Common
         parameter int NUM_BANK = 4;
 
         // Write
-        parameter int NUM_WRITE_AWQUEUE = 4;
-        parameter int NUM_WRITE_SCHEDULER = 4;
-        parameter int NUM_WRITE_ORDER_QUEUE_AW = 4;
+        parameter int NUM_WRITE_AWQUEUE = 16;
+        parameter int NUM_WRITE_SCHEDULER = 16;
+        parameter int NUM_WRITE_ORDER_QUEUE_AW = 16;
         
         
     `endif
@@ -64,7 +64,7 @@ package axi_pkg;
             endfunction
 
             function void set_random();
-                id = $urandom();
+                id = $urandom_range(0, NUM_READ_IDTABLE-1);
                 addr = $urandom();
                 addr[1:0] = 2'b00;
                 len = $urandom_range(0, 7);
@@ -115,7 +115,7 @@ package axi_pkg;
             endfunction
 
             function void set_random();
-                id = $urandom();
+                id = $urandom_range(0, NUM_READ_IDTABLE-1);
                 addr = $urandom();
                 addr[1:0] = 2'b00;
                 len = $urandom_range(0, 7);
@@ -205,7 +205,7 @@ package axi_pkg;
             endfunction
 
             function void set_random();
-                id = $urandom();
+                id = $urandom_range(0, NUM_READ_IDTABLE-1);
                 data = $urandom();
                 resp = 2'b00;
                 last = $urandom_range(0, 1);
@@ -242,7 +242,7 @@ package axi_pkg;
             endfunction
 
             function void set_random();
-                id = $urandom();
+                id = $urandom_range(0, NUM_READ_IDTABLE-1);
                 resp = 2'b00;
                 valid = ($urandom_range(0, 9) < 8);
                 ready = ($urandom_range(0, 9) < 8);
