@@ -26,7 +26,8 @@
     `define BANK_AWARE
     // `define MINAMI_CUSTOM
     `define REORDER_QUEUE
-    `define WRITE_MINAMI_CUSTOM
+    // `define WRITE_MINAMI_CUSTOM
+    `define FIFO_ORDERING
     `ifdef IN_ORDER
         $error("ERROR : IN_ORDER and OUT_ORDER cannot be both defined!");
     `endif

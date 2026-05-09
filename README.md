@@ -7,3 +7,6 @@
  - 2026-04-23 : AXI Master/Slave R/W 구현 완료.
 
  - 2026-05-01 : AXI4 Reordering FULL READ 구현 완료.
+ - 2026-05-06 : AXI4 Reordering Full 구현 완료. + Timing Analysis, Policy 점검
+
+ 

@@ -2,14 +2,13 @@
 `include "axi_include_top.vh"
 
 import axi_pkg::*;
+`include "tb_axi_ooo_top_pkg.sv"
+import tb_axi_ooo_top_pkg::*;
 
 
 module tb_axi_ooo_top;
     localparam CLK_PERIOD = 10;
-    localparam int NUM_READ_REQ = 60;
-    localparam int NUM_WRITE_REQ = 60;
     localparam logic [LEN_WIDTH-1:0] FIXED_BURST_LEN = 8'd15;
-    localparam logic [LEN_WIDTH-1:0] MAX_RANDOM_BURST_LEN = 8'd15;
     localparam int PERF_LOG_INTERVAL = 500;
     localparam int SCENARIO_TIMEOUT = 10000;
     localparam int MIN_RECOMMENDED_RUN_NS = 100000;
@@ -87,20 +86,11 @@ module tb_axi_ooo_top;
     logic                    M_AXI_BVALID;
     wire                     M_AXI_BREADY;
 
-    // typedef struct 사용해서 해당 값들을 모아 사전 def.
-    typedef struct packed {
-        logic [ID_WIDTH-1:0]   id;
-        logic [ADDR_WIDTH-1:0] addr;
-        logic [LEN_WIDTH-1:0]  len;
-        logic [2:0]            size;
-        logic [1:0]            burst;
-    } req_t;
-
     // SYSTEMVERILOG push_back / pop_front 내장 함수 사용.
-    req_t read_req_q[$];
-    req_t hp_read_q[$];
-    req_t write_req_q[$];
-    req_t hp_write_q[$];
+    tb_axi_req_t read_req_q[$];
+    tb_axi_req_t hp_read_q[$];
+    tb_axi_req_t write_req_q[$];
+    tb_axi_req_t hp_write_q[$];
     int unsigned read_accept_cycle_q[$];
     int unsigned write_accept_cycle_q[$];
     int unsigned expected_read_beats;
@@ -157,6 +147,9 @@ module tb_axi_ooo_top;
     bit perf_log_enable;
     integer perf_log_fd;
     string active_scenario_name;
+    string active_write_case_name;
+    int unsigned active_num_read_req;
+    int unsigned active_num_write_req;
 
     // module instantiate 
     axi_ooo_controller #(
@@ -296,6 +289,9 @@ module tb_axi_ooo_top;
             M_AXI_BRESP = 2'b00;
             M_AXI_BVALID = 1'b0;
             perf_log_enable = 1'b0;
+            active_write_case_name = "idle";
+            active_num_read_req = 0;
+            active_num_write_req = 0;
 
             read_req_q.delete();
             hp_read_q.delete();
@@ -380,38 +376,16 @@ module tb_axi_ooo_top;
 
     task automatic apply_reset;
         begin
+            ARESETn <= 1'b0;
             repeat (5) @(posedge ACLK);
             ARESETn <= 1'b1;
             repeat (2) @(posedge ACLK);
         end
     endtask
 
-    function automatic logic [LEN_WIDTH-1:0] scenario_len(input bit fixed_len_mode);
-        int unsigned rand_len;
-        begin
-            if (fixed_len_mode) begin
-                scenario_len = FIXED_BURST_LEN;
-            end
-            else begin
-                rand_len = $urandom_range(0, MAX_RANDOM_BURST_LEN);
-                scenario_len = rand_len;
-            end
-        end
-    endfunction
-
     task automatic display_perf_snapshot(input string tag);
         int unsigned elapsed_cycles;
-        int unsigned woq_valid_entries;
-        int unsigned woq_pending_w_entries;
-        int unsigned woq_done_w_entries;
-        int unsigned read_bank_max;
-        int unsigned read_bank_min;
-        int unsigned write_id_max;
-        int unsigned write_id_min;
-        int unsigned read_streak_avg_x100;
         int unsigned write_streak_avg_x100;
-        int unsigned read_streak_sum_snapshot;
-        int unsigned read_streak_samples_snapshot;
         int unsigned write_streak_sum_snapshot;
         int unsigned write_streak_samples_snapshot;
         int unsigned read_latency_avg;
@@ -420,28 +394,13 @@ module tb_axi_ooo_top;
         int unsigned aw_stall_per_req_x100;
         begin
             elapsed_cycles = cycle_cnt - scenario_start_cycle;
-            woq_valid_entries = 0;
-            woq_pending_w_entries = 0;
-            woq_done_w_entries = 0;
-            read_bank_max = 0;
-            read_bank_min = read_bank_issue_count[0];
-            write_id_max = 0;
-            write_id_min = write_id_issue_count[0];
-            read_streak_sum_snapshot = read_same_bank_streak_sum;
-            read_streak_samples_snapshot = read_same_bank_streak_samples;
             write_streak_sum_snapshot = write_same_id_streak_sum;
             write_streak_samples_snapshot = write_same_id_streak_samples;
-            if (have_last_read_issue_bank) begin
-                read_streak_sum_snapshot += read_same_bank_streak;
-                read_streak_samples_snapshot++;
-            end
             if (have_last_write_issue_id) begin
                 write_streak_sum_snapshot += write_same_id_streak;
                 write_streak_samples_snapshot++;
             end
-            read_streak_avg_x100 =
-                (read_streak_samples_snapshot == 0) ? 0 :
-                ((read_streak_sum_snapshot * 100) / read_streak_samples_snapshot);
+
             write_streak_avg_x100 =
                 (write_streak_samples_snapshot == 0) ? 0 :
                 ((write_streak_sum_snapshot * 100) / write_streak_samples_snapshot);
@@ -454,100 +413,71 @@ module tb_axi_ooo_top;
             aw_stall_per_req_x100 =
                 (aw_burst_count == 0) ? 0 : ((aw_ready_stall_count * 100) / aw_burst_count);
 
-            for (int dbg_i = 0; dbg_i < NUM_WRITE_ORDER_QUEUE_AW; dbg_i++) begin
-                if (dut.u_axi_write_ooo.u_write_order_queue.reg_queue_valid[dbg_i]) begin
-                    woq_valid_entries++;
-                    if (dut.u_axi_write_ooo.u_write_order_queue.reg_w_done[dbg_i])
-                        woq_done_w_entries++;
-                    else
-                        woq_pending_w_entries++;
-                end
+            if (tag == "progress") begin
+                $display("[%0t][%s][progress] cycle=%0d elapsed=%0d aw=%0d/%0d wbeats=%0d/%0d b=%0d/%0d aw_stall=%0d w_stall=%0d m_aw_stall=%0d write_lat_avg=%0d",
+                         $time, active_scenario_name,
+                         cycle_cnt, elapsed_cycles,
+                         aw_burst_count, active_num_write_req,
+                         observed_w_beats, expected_w_beats,
+                         observed_b, active_num_write_req,
+                         aw_ready_stall_count, dbg_w_input_stall_count,
+                         dbg_m_aw_ready_stall_count, write_latency_avg);
             end
-            for (int dbg_i = 0; dbg_i < NUM_BANK; dbg_i++) begin
-                if (read_bank_issue_count[dbg_i] > read_bank_max)
-                    read_bank_max = read_bank_issue_count[dbg_i];
-                if (read_bank_issue_count[dbg_i] < read_bank_min)
-                    read_bank_min = read_bank_issue_count[dbg_i];
+            else if (tag == "summary") begin
+                $display("============================================================");
+                $display("[%0t][%s][summary] case=%s elapsed=%0d cycle=%0d",
+                         $time, active_scenario_name, active_write_case_name,
+                         elapsed_cycles, cycle_cnt);
+                $display("  progress : ar=%0d/%0d rbeats=%0d/%0d aw=%0d/%0d wbeats=%0d/%0d b=%0d/%0d",
+                         observed_ar, active_num_read_req,
+                         observed_read_beats, expected_read_beats,
+                         aw_burst_count, active_num_write_req,
+                         observed_w_beats, expected_w_beats,
+                         observed_b, active_num_write_req);
+                $display("  latency  : read_avg=%0d read_max=%0d write_avg=%0d write_max=%0d",
+                         read_latency_avg, read_latency_max,
+                         write_latency_avg, write_latency_max);
+                $display("  stalls   : ar=%0d(%0d/req x100) aw=%0d(%0d/req x100) w_input=%0d m_aw_ready=%0d reorder=%0d",
+                         ar_ready_stall_count, ar_stall_per_req_x100,
+                         aw_ready_stall_count, aw_stall_per_req_x100,
+                         dbg_w_input_stall_count, dbg_m_aw_ready_stall_count,
+                         reorder_stall_count);
+                $display("  policy   : write_issue=%0d same_id_hit=%0d miss=%0d streak_avg_x100=%0d streak_max=%0d",
+                         write_issue_count, write_same_id_hit_count,
+                         write_same_id_miss_count, write_streak_avg_x100,
+                         write_same_id_streak_max);
+                $display("============================================================");
             end
-            for (int dbg_i = 0; dbg_i < NUM_READ_IDTABLE; dbg_i++) begin
-                if (write_id_issue_count[dbg_i] > write_id_max)
-                    write_id_max = write_id_issue_count[dbg_i];
-                if (write_id_issue_count[dbg_i] < write_id_min)
-                    write_id_min = write_id_issue_count[dbg_i];
+            else begin
+                $display("[%0t][%s][%s] case=%s cycle=%0d elapsed=%0d ar=%0d/%0d aw=%0d/%0d rbeats=%0d/%0d wbeats=%0d/%0d b=%0d/%0d aw_stall=%0d w_stall=%0d write_lat_avg=%0d write_lat_max=%0d",
+                         $time, active_scenario_name, tag, active_write_case_name,
+                         cycle_cnt, elapsed_cycles,
+                         observed_ar, active_num_read_req,
+                         aw_burst_count, active_num_write_req,
+                         observed_read_beats, expected_read_beats,
+                         observed_w_beats, expected_w_beats,
+                         observed_b, active_num_write_req,
+                         aw_ready_stall_count, dbg_w_input_stall_count,
+                         write_latency_avg, write_latency_max);
             end
 
-            $display("[%0t][%s][%s] cycle=%0d elapsed=%0d ar_burst=%0d aw_burst=%0d r_burst=%0d w_burst=%0d b_resp=%0d rbeats=%0d/%0d wbeats=%0d/%0d reorder_stall_count=%0d ar_stall=%0d aw_stall=%0d ar_stall_per_req_x100=%0d aw_stall_per_req_x100=%0d read_hit=%0d read_miss=%0d read_issue=%0d read_bank_min=%0d read_bank_max=%0d read_streak_avg_x100=%0d read_streak_max=%0d read_lat_avg=%0d read_lat_max=%0d write_id_hit=%0d write_id_miss=%0d write_issue=%0d write_id_min=%0d write_id_max=%0d write_streak_avg_x100=%0d write_streak_max=%0d write_lat_avg=%0d write_lat_max=%0d awq_bp=%0d aw_sched_in_stall=%0d aw_sched_out_stall=%0d order_awq_stall=%0d order_aw_sched_wait=%0d b_aw_stall=%0d w_input_stall=%0d m_aw_ready_stall=%0d woq_valid=%0d woq_pending_w=%0d woq_done_w=%0d woq_has_empty=%0b woq_active_w=%0b woq_has_w_target=%0b woq_w_scan_busy=%0b woq_active_idx=%0d woq_active_count=%0d woq_active_total=%0d sched_valid=%0b sched_ready=%0b sched_id=%0h sched_len=%0d woq_sched_issue=%0b woq_sched_scan=%0b woq_sched_best=%0b woq_req_id=%0h woq_req_len=%0d",
-                     $time, active_scenario_name, tag,
-                     cycle_cnt, elapsed_cycles,
-                     ar_burst_count, aw_burst_count, r_burst_count, w_burst_count, b_resp_count,
-                     observed_read_beats, expected_read_beats,
-                     observed_w_beats, expected_w_beats,
-                     reorder_stall_count, ar_ready_stall_count, aw_ready_stall_count,
-                     ar_stall_per_req_x100, aw_stall_per_req_x100,
-                     read_policy_hit_count, read_policy_miss_count, read_issue_count,
-                     read_bank_min, read_bank_max, read_streak_avg_x100,
-                     read_same_bank_streak_max, read_latency_avg, read_latency_max,
-                     write_same_id_hit_count, write_same_id_miss_count, write_issue_count,
-                     write_id_min, write_id_max, write_streak_avg_x100,
-                     write_same_id_streak_max, write_latency_avg, write_latency_max,
-                     dbg_awq_backpressure_count, dbg_aw_sched_input_stall_count,
-                     dbg_aw_sched_output_stall_count, dbg_order_aw_queue_stall_count,
-                     dbg_order_aw_sched_wait_count, dbg_b_aw_sched_stall_count,
-                     dbg_w_input_stall_count, dbg_m_aw_ready_stall_count,
-                     woq_valid_entries, woq_pending_w_entries, woq_done_w_entries,
-                     dut.u_axi_write_ooo.u_write_order_queue.has_empty,
-                     dut.u_axi_write_ooo.u_write_order_queue.active_w_valid,
-                     dut.u_axi_write_ooo.u_write_order_queue.has_w_target,
-                     dut.u_axi_write_ooo.u_write_order_queue.w_scan_busy,
-                     dut.u_axi_write_ooo.u_write_order_queue.active_w_index,
-                     dut.u_axi_write_ooo.u_write_order_queue.active_w_count,
-                     dut.u_axi_write_ooo.u_write_order_queue.active_w_total,
-                     dut.u_axi_write_ooo.sched_o_awvalid,
-                     dut.u_axi_write_ooo.sched_o_awready,
-                     dut.u_axi_write_ooo.sched_o_awid,
-                     dut.u_axi_write_ooo.sched_o_awlen,
-                     dut.u_axi_write_ooo.u_write_order_queue.sched_issue_valid,
-                     dut.u_axi_write_ooo.u_write_order_queue.sched_scan_busy,
-                     dut.u_axi_write_ooo.u_write_order_queue.sched_scan_best_valid,
-                     dut.u_axi_write_ooo.u_write_order_queue.sched_req_AWID,
-                     dut.u_axi_write_ooo.u_write_order_queue.sched_req_AWLEN);
             if (perf_log_fd != 0) begin
                 $fdisplay(perf_log_fd,
-                          "[%0t][%s][%s] cycle=%0d elapsed=%0d ar_burst=%0d aw_burst=%0d r_burst=%0d w_burst=%0d b_resp=%0d rbeats=%0d/%0d wbeats=%0d/%0d reorder_stall_count=%0d ar_stall=%0d aw_stall=%0d ar_stall_per_req_x100=%0d aw_stall_per_req_x100=%0d read_hit=%0d read_miss=%0d read_issue=%0d read_bank_min=%0d read_bank_max=%0d read_streak_avg_x100=%0d read_streak_max=%0d read_lat_avg=%0d read_lat_max=%0d write_id_hit=%0d write_id_miss=%0d write_issue=%0d write_id_min=%0d write_id_max=%0d write_streak_avg_x100=%0d write_streak_max=%0d write_lat_avg=%0d write_lat_max=%0d awq_bp=%0d aw_sched_in_stall=%0d aw_sched_out_stall=%0d order_awq_stall=%0d order_aw_sched_wait=%0d b_aw_stall=%0d w_input_stall=%0d m_aw_ready_stall=%0d woq_valid=%0d woq_pending_w=%0d woq_done_w=%0d woq_has_empty=%0b woq_active_w=%0b woq_has_w_target=%0b woq_w_scan_busy=%0b woq_active_idx=%0d woq_active_count=%0d woq_active_total=%0d sched_valid=%0b sched_ready=%0b sched_id=%0h sched_len=%0d woq_sched_issue=%0b woq_sched_scan=%0b woq_sched_best=%0b woq_req_id=%0h woq_req_len=%0d",
-                          $time, active_scenario_name, tag,
+                          "time=%0t scenario=%s tag=%s case=%s cycle=%0d elapsed=%0d ar=%0d/%0d rbeats=%0d/%0d aw=%0d/%0d wbeats=%0d/%0d b=%0d/%0d ar_stall=%0d aw_stall=%0d w_stall=%0d m_aw_stall=%0d reorder_stall=%0d read_lat_avg=%0d read_lat_max=%0d write_lat_avg=%0d write_lat_max=%0d same_id_hit=%0d same_id_miss=%0d write_streak_avg_x100=%0d write_streak_max=%0d",
+                          $time, active_scenario_name, tag, active_write_case_name,
                           cycle_cnt, elapsed_cycles,
-                          ar_burst_count, aw_burst_count, r_burst_count, w_burst_count, b_resp_count,
+                          observed_ar, active_num_read_req,
                           observed_read_beats, expected_read_beats,
+                          aw_burst_count, active_num_write_req,
                           observed_w_beats, expected_w_beats,
-                          reorder_stall_count, ar_ready_stall_count, aw_ready_stall_count,
-                          ar_stall_per_req_x100, aw_stall_per_req_x100,
-                          read_policy_hit_count, read_policy_miss_count, read_issue_count,
-                          read_bank_min, read_bank_max, read_streak_avg_x100,
-                          read_same_bank_streak_max, read_latency_avg, read_latency_max,
-                          write_same_id_hit_count, write_same_id_miss_count, write_issue_count,
-                          write_id_min, write_id_max, write_streak_avg_x100,
-                          write_same_id_streak_max, write_latency_avg, write_latency_max,
-                          dbg_awq_backpressure_count, dbg_aw_sched_input_stall_count,
-                          dbg_aw_sched_output_stall_count, dbg_order_aw_queue_stall_count,
-                          dbg_order_aw_sched_wait_count, dbg_b_aw_sched_stall_count,
+                          observed_b, active_num_write_req,
+                          ar_ready_stall_count, aw_ready_stall_count,
                           dbg_w_input_stall_count, dbg_m_aw_ready_stall_count,
-                          woq_valid_entries, woq_pending_w_entries, woq_done_w_entries,
-                          dut.u_axi_write_ooo.u_write_order_queue.has_empty,
-                          dut.u_axi_write_ooo.u_write_order_queue.active_w_valid,
-                          dut.u_axi_write_ooo.u_write_order_queue.has_w_target,
-                          dut.u_axi_write_ooo.u_write_order_queue.w_scan_busy,
-                          dut.u_axi_write_ooo.u_write_order_queue.active_w_index,
-                          dut.u_axi_write_ooo.u_write_order_queue.active_w_count,
-                          dut.u_axi_write_ooo.u_write_order_queue.active_w_total,
-                          dut.u_axi_write_ooo.sched_o_awvalid,
-                          dut.u_axi_write_ooo.sched_o_awready,
-                          dut.u_axi_write_ooo.sched_o_awid,
-                          dut.u_axi_write_ooo.sched_o_awlen,
-                          dut.u_axi_write_ooo.u_write_order_queue.sched_issue_valid,
-                          dut.u_axi_write_ooo.u_write_order_queue.sched_scan_busy,
-                          dut.u_axi_write_ooo.u_write_order_queue.sched_scan_best_valid,
-                          dut.u_axi_write_ooo.u_write_order_queue.sched_req_AWID,
-                          dut.u_axi_write_ooo.u_write_order_queue.sched_req_AWLEN);
+                          reorder_stall_count,
+                          read_latency_avg, read_latency_max,
+                          write_latency_avg, write_latency_max,
+                          write_same_id_hit_count, write_same_id_miss_count,
+                          write_streak_avg_x100, write_same_id_streak_max);
                 $fflush(perf_log_fd);
             end
         end
@@ -563,6 +493,27 @@ module tb_axi_ooo_top;
                           "[%0t][%s][%s] cycle=%0d id=0x%0h addr=0x%0h len=%0d beats=%0d",
                           $time, active_scenario_name, event_name,
                           cycle_cnt, id, addr, len, len + 1);
+                $fflush(perf_log_fd);
+            end
+        end
+    endtask
+
+    task automatic display_scenario_config(input tb_axi_ooo_scenario_cfg_t cfg);
+        begin
+            $display("[%0t][%s][config] case=%s read_req=%0d write_req=%0d fixed_len_mode=%0b fixed_len=%0d max_random_len=%0d same_id=%0h addr_base=0x%0h addr_stride=0x%0h",
+                     $time, cfg.name, write_case_name(cfg.write_case),
+                     cfg.num_read_req, cfg.num_write_req,
+                     cfg.fixed_len_mode, cfg.fixed_len, cfg.max_random_len,
+                     cfg.same_write_id, cfg.write_addr_base, cfg.write_addr_stride);
+
+            if (perf_log_fd != 0) begin
+                $fdisplay(perf_log_fd,
+                          "time=%0t scenario=%s tag=config case=%s read_req=%0d write_req=%0d fixed_len_mode=%0b fixed_len=%0d max_random_len=%0d same_id=%0h addr_base=0x%0h addr_stride=0x%0h data_base=0x%0h data_stride=0x%0h",
+                          $time, cfg.name, write_case_name(cfg.write_case),
+                          cfg.num_read_req, cfg.num_write_req,
+                          cfg.fixed_len_mode, cfg.fixed_len, cfg.max_random_len,
+                          cfg.same_write_id, cfg.write_addr_base, cfg.write_addr_stride,
+                          cfg.write_data_base, cfg.write_data_stride);
                 $fflush(perf_log_fd);
             end
         end
@@ -604,7 +555,7 @@ module tb_axi_ooo_top;
         input logic [ADDR_WIDTH-1:0] addr,
         input logic [LEN_WIDTH-1:0] len
     );
-        req_t req;
+        tb_axi_req_t req;
         axi_aw_rand aw_tr;
         logic [ID_WIDTH-1:0] target_id;
         logic [ADDR_WIDTH-1:0] target_addr;
@@ -670,7 +621,7 @@ module tb_axi_ooo_top;
         end
     endtask
 
-    task automatic send_r_burst(input req_t req);
+    task automatic send_r_burst(input tb_axi_req_t req);
         int unsigned beat;
         axi_r_rand r_tr;
         logic [ID_WIDTH-1:0] target_id;
@@ -706,9 +657,9 @@ module tb_axi_ooo_top;
         end
     endtask
 
-    // 상단에서 사전 typedef 한 req_t에게 값 지정해주는 것.
+    // 상단에서 사전 typedef 한 tb_axi_req_t에게 값 지정해주는 것.
     initial begin : hp_read_addr_model
-        req_t req;
+        tb_axi_req_t req;
         logic [TB_READ_BANK_BITS-1:0] issue_bank;
         forever begin
             @(posedge ACLK);
@@ -755,7 +706,7 @@ module tb_axi_ooo_top;
     end
 
     initial begin : hp_read_data_model  // 데이터 읽기 모델임.
-        req_t req;
+        tb_axi_req_t req;
         wait (ARESETn);
         forever begin
             @(posedge ACLK);
@@ -768,7 +719,7 @@ module tb_axi_ooo_top;
     end
 
     initial begin : hp_write_resp_model
-        req_t req;
+        tb_axi_req_t req;
         wait (ARESETn);
 
         forever begin
@@ -799,10 +750,23 @@ module tb_axi_ooo_top;
     end
 
     always @(posedge ACLK) begin
-        req_t aw_req;
+        tb_axi_req_t aw_req;
         int unsigned latency;
 
         if (ARESETn) begin
+            if ((cycle_cnt > 2) &&
+                ($isunknown(dut.u_axi_write_ooo.sched_o_awvalid) ||
+                 $isunknown(dut.u_axi_write_ooo.sched_i_awready) ||
+                 $isunknown(S_AXI_WREADY))) begin
+                display_perf_snapshot("unknown_write_handshake");
+                $fatal(1,
+                    "Unknown write handshake(%s): sched_valid=%b sched_i_ready=%b s_wready=%b. Check write scheduler policy macro/source selection.",
+                    active_scenario_name,
+                    dut.u_axi_write_ooo.sched_o_awvalid,
+                    dut.u_axi_write_ooo.sched_i_awready,
+                    S_AXI_WREADY);
+            end
+
             M_AXI_AWREADY <= (cycle_cnt[2:1] != 2'b11);
             M_AXI_WREADY <= (cycle_cnt[3:1] != 3'b101);
 
@@ -948,71 +912,92 @@ module tb_axi_ooo_top;
         end
     end
 
-    task automatic run_scenario(input string scenario_name, input bit fixed_len_mode);
+    task automatic run_scenario(input tb_axi_ooo_scenario_cfg_t cfg);
         int unsigned timeout;
         begin
-            reset_perf_counters(scenario_name);
+            active_num_read_req = cfg.num_read_req;
+            active_num_write_req = cfg.num_write_req;
+            active_write_case_name = write_case_name(cfg.write_case);
+            reset_perf_counters(cfg.name);
             perf_log_enable = 1'b1;
+            display_scenario_config(cfg);
             display_perf_snapshot("start");
 
-            fork
-                begin : send_ar_random
-                    axi_ar_rand ar_tr;
-                    logic [LEN_WIDTH-1:0] req_len;
+            fork : stimulus_phase
+                begin : stimulus_threads
+                    fork
+                        begin : send_ar_random
+                            tb_axi_req_t ar_req;
+                            bit has_ar_req;
 
-                    for (int i=0; i<NUM_READ_REQ; i++) begin
-                        ar_tr = new();
-                        ar_tr.set_random();
-                        req_len = scenario_len(fixed_len_mode);
-                        send_ar(ar_tr.id, ar_tr.addr, req_len);
-                    end
+                            for (int i=0; i<cfg.num_read_req; i++) begin
+                                build_scenario_read_req(cfg, has_ar_req, ar_req);
+                                if (has_ar_req) begin
+                                    send_ar(ar_req.id, ar_req.addr, ar_req.len);
+                                end
+                            end
+                        end
+
+                        begin : send_aw_random
+                            tb_axi_req_t aw_req;
+
+                            for (int i=0; i<cfg.num_write_req; i++) begin
+                                build_scenario_write_req(cfg, cfg.write_case, i, aw_req);
+                                send_aw(aw_req.id, aw_req.addr, aw_req.len);
+                            end
+                        end
+
+                        begin : send_w_random
+                            tb_axi_req_t w_req;
+                            int unsigned sent_w;
+
+                            sent_w = 0;
+
+                            while (sent_w < cfg.num_write_req) begin
+                                wait (write_req_q.size() != 0);
+                                w_req = write_req_q.pop_front();
+                                send_w_burst(w_req.len, scenario_write_data_base(cfg.write_case, cfg, sent_w));
+                                sent_w++;
+                            end
+                        end
+                    join
                 end
 
-                begin : send_aw_random
-                    axi_aw_rand aw_tr;
-                    logic [LEN_WIDTH-1:0] req_len;
-
-                    for (int i=0; i<NUM_WRITE_REQ; i++) begin
-                        aw_tr = new();
-                        aw_tr.set_random();
-                        req_len = scenario_len(fixed_len_mode);
-                        send_aw(aw_tr.id, aw_tr.addr, req_len);
-                    end
+                begin : stimulus_watchdog
+                    repeat (SCENARIO_TIMEOUT) @(posedge ACLK);
+                    display_perf_snapshot("stimulus_timeout");
+                    $fatal(1,
+                        "Stimulus timeout(%s): s_ar=%0d/%0d s_aw=%0d/%0d m_aw=%0d/%0d write_req_q=%0d s_wready=%b m_wbeats=%0d/%0d b=%0d/%0d",
+                        active_scenario_name,
+                        observed_ar, cfg.num_read_req,
+                        aw_burst_count, cfg.num_write_req,
+                        observed_aw, cfg.num_write_req,
+                        write_req_q.size(),
+                        S_AXI_WREADY,
+                        observed_w_beats, expected_w_beats,
+                        observed_b, cfg.num_write_req);
                 end
-
-                begin : send_w_random
-                    req_t w_req;
-                    int unsigned sent_w;
-
-                    sent_w = 0;
-
-                    while (sent_w < NUM_WRITE_REQ) begin
-                        wait (write_req_q.size() != 0);
-                        w_req = write_req_q.pop_front();
-                        send_w_burst(w_req.len, 32'hA000_0000 + sent_w*32'h0100);
-                        sent_w++;
-                    end
-                end
-            join
+            join_any
+            disable stimulus_phase;
 
             timeout = 0;
-            while ((observed_ar < NUM_READ_REQ) ||
+            while ((observed_ar < cfg.num_read_req) ||
                    (observed_read_beats < expected_read_beats) ||
-                   (observed_aw < NUM_WRITE_REQ) ||
+                   (observed_aw < cfg.num_write_req) ||
                    (observed_w_beats < expected_w_beats) ||
-                   (observed_b < NUM_WRITE_REQ)) begin
+                   (observed_b < cfg.num_write_req)) begin
                 @(posedge ACLK);
                 timeout++;
                 if (timeout > SCENARIO_TIMEOUT) begin
                     display_perf_snapshot("timeout");
                     $fatal(1,
-                        "Timeout(%s): ar=%0d/%0d rbeats=%0d/%0d aw=%0d/%0d wbeats=%0d/%0d b=%0d/%0d",
+                        "Timeout(%s): m_ar=%0d/%0d rbeats=%0d/%0d m_aw=%0d/%0d m_wbeats=%0d/%0d b=%0d/%0d",
                         active_scenario_name,
-                        observed_ar, NUM_READ_REQ,
+                        observed_ar, cfg.num_read_req,
                         observed_read_beats, expected_read_beats,
-                        observed_aw, NUM_WRITE_REQ,
+                        observed_aw, cfg.num_write_req,
                         observed_w_beats, expected_w_beats,
-                        observed_b, NUM_WRITE_REQ);
+                        observed_b, cfg.num_write_req);
                 end
             end
 
@@ -1023,7 +1008,12 @@ module tb_axi_ooo_top;
     endtask
 
     initial begin : main_test
+        tb_axi_ooo_scenario_cfg_t scenarios[$];
+        int scenario_idx;
+
         init_signals();
+        build_default_write_perf_scenarios(scenarios);
+
         perf_log_fd = $fopen("tb_axi_ooo_top_perf.log", "w");
         if (perf_log_fd == 0) begin
             $error("Failed to open tb_axi_ooo_top_perf.log");
@@ -1041,12 +1031,11 @@ module tb_axi_ooo_top;
             $dumpvars(0, tb_axi_ooo_top);
         `endif
 
-        apply_reset();
-        run_scenario("fixed_len15_random_access", 1'b1);
-
-        init_signals();
-        apply_reset();
-        run_scenario("variable_len_random_access", 1'b0);
+        foreach (scenarios[scenario_idx]) begin
+            init_signals();
+            apply_reset();
+            run_scenario(scenarios[scenario_idx]);
+        end
 
         $display("PASS: axi_ooo_controller top performance scenarios completed.");
         if (perf_log_fd != 0) begin

@@ -31,6 +31,12 @@ module axi_ooo_aw_scheduler #(
     output o_AWVALID
 );
     `ifdef WRITE_MINAMI_CUSTOM
+        `ifdef FIFO_ORDERING
+            `error "Select only one write scheduler policy: WRITE_MINAMI_CUSTOM or FIFO_ORDERING."
+        `endif
+    `endif
+
+    `ifdef WRITE_MINAMI_CUSTOM
         localparam KEEP_MAX_LENGTH = WRITE_KEEP_MAX_LENGTH;
         localparam CNT_WIDTH = $clog2(KEEP_MAX_LENGTH);
         localparam ID_MAX = (1<<ID_WIDTH);
@@ -271,8 +277,61 @@ module axi_ooo_aw_scheduler #(
             end
         `endif
 
-    `elsif CUSTOM_POLICY_WRITE
+    `elsif FIFO_ORDERING
+        wire aw_in = i_AWVALID & i_AWREADY;
+        wire aw_out = o_AWREADY & o_AWVALID;
 
+        reg [ID_WIDTH-1:0] reg_AWID;
+        reg [ADDR_WIDTH-1:0] reg_AWADDR;
+        reg [LEN_WIDTH-1:0] reg_AWLEN;
+        reg [2:0] reg_AWSIZE;
+        reg [1:0] reg_AWBURST;
+        reg reg_valid;
+
+        assign i_AWREADY = !reg_valid || aw_out;
+        assign o_AWVALID = reg_valid;
+        assign o_AWID    = reg_valid ? reg_AWID    : '0;
+        assign o_AWADDR  = reg_valid ? reg_AWADDR  : '0;
+        assign o_AWLEN   = reg_valid ? reg_AWLEN   : '0;
+        assign o_AWSIZE  = reg_valid ? reg_AWSIZE  : '0;
+        assign o_AWBURST = reg_valid ? reg_AWBURST : '0;
+
+        always @(posedge ACLK or negedge ARESETn) begin
+            if (!ARESETn) begin
+                reg_AWID <= '0;
+                reg_AWADDR <= '0;
+                reg_AWLEN <= '0;
+                reg_AWSIZE <= '0;
+                reg_AWBURST <= '0;
+                reg_valid <= OFF;
+            end
+            else begin
+                if (aw_in) begin
+                    reg_AWID <= i_AWID;
+                    reg_AWADDR <= i_AWADDR;
+                    reg_AWLEN <= i_AWLEN;
+                    reg_AWSIZE <= i_AWSIZE;
+                    reg_AWBURST <= i_AWBURST;
+                    reg_valid <= ON;
+                end
+                else if (aw_out) begin
+                    reg_valid <= OFF;
+                end
+            end
+        end
+
+        `ifdef INITIAL_REG_RESET
+            initial begin
+                reg_AWID = '0;
+                reg_AWADDR = '0;
+                reg_AWLEN = '0;
+                reg_AWSIZE = '0;
+                reg_AWBURST = '0;
+                reg_valid = OFF;
+            end
+        `endif
+    `else
+        `error "No write scheduler policy selected. Define WRITE_MINAMI_CUSTOM or FIFO_ORDERING."
     `endif
 
 endmodule
